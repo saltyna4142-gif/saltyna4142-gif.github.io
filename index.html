@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>3Dフィールド Studio v1.1 — 映画風ポストプロセスと星空・室内スタジオ</title>
+<title>3Dフィールド Studio v1.3 — シーン切替＋生活動作モデル（全64種）</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:100%; height:100%; overflow:hidden; background:#0b0f14; font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif; }
@@ -40,6 +40,14 @@
   .mrow.sel { border-color:rgba(255,204,85,.6); }
   .mrow select { width:86px !important; margin:0 !important; padding:3px 4px !important; font-size:11.5px !important; }
   .mrow button { background:transparent; border:none; color:#c9d5e2; font-size:14px; cursor:pointer; padding:2px 3px; }
+  #lifeState { font-size:11.5px; color:#8fa3bb; line-height:1.5; margin:4px 0 6px; }
+  #lifeBtns { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; max-height:288px; overflow-y:auto; padding-right:2px; margin-bottom:6px; }
+  #lifeBtns button { background:#1b2635; color:#e8edf4; border:1px solid rgba(255,255,255,.13); border-radius:8px;
+    padding:6px 2px 5px; font-size:11px; line-height:1.25; cursor:pointer; }
+  #lifeBtns button small { display:block; font-size:8.5px; color:#8fa3bb; margin-top:1px; letter-spacing:.04em; }
+  #lifeBtns button:hover { background:#27374f; }
+  #lifeBtns button[aria-pressed="true"] { background:#2f5fd0; border-color:#7aa2ff; color:#fff; }
+  #lifeBtns button[aria-pressed="true"] small { color:#cfe0ff; }
   #toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:30; background:rgba(13,18,26,.88);
     color:#e8edf4; font-size:12.5px; padding:8px 16px; border-radius:999px; border:1px solid rgba(255,255,255,.14);
     opacity:0; transition:opacity .3s; pointer-events:none; max-width:92vw; text-align:center; }
@@ -51,10 +59,20 @@
 </head>
 <body>
 <div id="app"></div>
-<button id="uiToggle">🎛 Studio v1.1｜設定を表示</button>
+<button id="uiToggle">🎛 Studio v1.3｜設定を表示</button>
 <div id="panel">
   <h1>3Dフィールド Studio</h1>
-  <div class="ver">v1.1 — PBR＋環境光＋映画風ポストプロセスの展示フィールド</div>
+  <div class="ver">v1.3 — シーン切替＋生活動作モデル（指・全64種・小道具）＋PBR＋映画風ポストプロセス</div>
+  <h2>シーン</h2>
+  <label>場所
+    <select id="sceneSel">
+      <option value="field">フィールド（野原）</option>
+      <option value="city">街並み</option>
+      <option value="indoor">屋内（リビング）</option>
+      <option value="country">田舎（農家と丘）</option>
+      <option value="hotel">ホテル（ロビー）</option>
+    </select>
+  </label>
   <h2>環境</h2>
   <label>プリセット
     <select id="envSel">
@@ -83,12 +101,17 @@
   <h2>モデル</h2>
   <button class="act primary" id="fileBtn">📂 GLB / glTF を読み込む</button>
   <input id="fileIn" type="file" accept=".glb,.gltf" multiple style="display:none">
-  <button class="act" id="sampleBtn">👥 サンプル（男女）を配置し直す</button>
+  <button class="act" id="sampleBtn">👥 サンプル（男女＋生活動作）を配置し直す</button>
   <div id="modelList"></div>
+  <h2 id="lifeHead">生活動作モデル</h2>
+  <p class="hint" style="margin-top:0">中央の生活動作モデル（指まで動く再構築モデル）専用の動作集です。ボール・バット・スマホ・皿・フライパン・アイロン・掃除機・椅子・マットも動作に合わせて出ます。</p>
+  <div id="lifeState">読み込み中…</div>
+  <div id="lifeBtns"></div>
+  <button class="act" id="lifeStop">⏹ 生活動作を止める</button>
   <h2>撮影</h2>
   <button class="act" id="shotBtn">📷 いまの見た目を画像で保存（PNG）</button>
   <p class="hint">モデルファイルを画面へドラッグ＆ドロップしても読み込めます。<br>
-  操作：ドラッグ＝回転／ホイール＝拡大・縮小／右ドラッグ＝視点移動／モデルをクリック＝選択、ダブルクリック＝そのモデルに画角を合わせる。<br>キー：1〜5＝環境切替／R＝自動回転／H＝設定の表示・非表示。</p>
+  操作：ドラッグ＝回転／ホイール＝拡大・縮小／右ドラッグ＝視点移動／モデルをクリック＝選択、ダブルクリック＝そのモデルに画角を合わせる。<br>キー：1〜5＝環境切替／6〜0＝シーン切替（フィールド・街並み・屋内・田舎・ホテル）／R＝自動回転／H＝設定の表示・非表示。</p>
 </div>
 <div id="toast"></div>
 <div id="drop">ここに GLB / glTF をドロップ</div>
@@ -4778,8 +4801,11 @@
 <script>const SAMPLE_FETCH=true;
 const SAMPLE_M_URL='human-m.b64';
 const SAMPLE_F_URL='human-f.b64';
+const SAMPLE_LIFE_URL='life-model.b64';
 'use strict';
-/* 3Dフィールド Studio v1.0 — three.js PBR + 環境光（PMREM）の展示フィールド */
+/* 3Dフィールド Studio v1.3 — three.js PBR + 環境光（PMREM）の展示フィールド
+   v1.2: シーン切替（街並み・屋内・田舎・ホテル）
+   v1.3: 生活動作スタジオのモデル（骨格・指・全64動作・小道具）を組み込み */
 const $ = id => document.getElementById(id);
 const toastEl = $('toast');
 let toastTimer = 0;
@@ -4838,7 +4864,7 @@ $('app').appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0x8899aa, 16, 55);
 const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 300);
-camera.position.set(2.4, 1.7, 3.6);
+camera.position.set(2.7, 1.8, 4.5);
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 0.9, 0);
 controls.enableDamping = true;
@@ -4919,8 +4945,8 @@ function refreshEnvMap() {
 const sun = new THREE.DirectionalLight(0xffffff, 2.3);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.left = -4.5; sun.shadow.camera.right = 4.5;
-sun.shadow.camera.top = 4.5; sun.shadow.camera.bottom = -4.5;
+sun.shadow.camera.left = -30; sun.shadow.camera.right = 30;
+sun.shadow.camera.top = 30; sun.shadow.camera.bottom = -30;
 sun.shadow.camera.near = 1; sun.shadow.camera.far = 60;
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
 scene.add(sun); scene.add(sun.target);
@@ -5070,7 +5096,8 @@ function setSelected(m) {
   if (m) { boxHelper = new THREE.BoxHelper(m.group, 0xffcc55); scene.add(boxHelper); }
   refreshModelList();
 }
-function registerModel(obj, name, animations) {
+function registerModel(obj, name, animations, options) {
+  options = options || {};
   const group = new THREE.Group();
   group.add(obj); scene.add(group);
   obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true;
@@ -5083,12 +5110,14 @@ function registerModel(obj, name, animations) {
     new THREE.MeshBasicMaterial({ map: contactTex, transparent: true, depthWrite: false }));
   contact.rotation.x = -Math.PI / 2; contact.position.y = 0.005;
   contact.scale.set(Math.max(size.x, 0.3) * 1.5, Math.max(size.z, 0.3) * 1.9, 1);
+  if (options.life) contact.scale.set(0.85, 1.05, 1); // 生活モデルはTポーズ幅でなく足元幅に合わせる
   contact.visible = $('contactChk').checked;
   group.add(contact);
-  const m = { group, obj, name, contact, size,
+  const m = { group, obj, name, contact, size, life: !!options.life, role: options.role || null,
     mixer: animations && animations.length ? new THREE.AnimationMixer(obj) : null,
     clips: animations || [], action: null };
-  if (m.mixer && m.clips.length) { m.action = m.mixer.clipAction(m.clips[0]); m.action.play(); }
+  if (m.mixer && m.clips.length && !m.life) { m.action = m.mixer.clipAction(m.clips[0]); m.action.play(); }
+  if (m.life) setupLifeModel(m);
   models.push(m); setSelected(m);
   return m;
 }
@@ -5096,6 +5125,13 @@ function removeModel(m) {
   const i = models.indexOf(m); if (i < 0) return;
   models.splice(i, 1);
   if (selected === m) setSelected(null);
+  if (m.life && lifeModel === m) {
+    lifeModel = null;
+    LIFE_STATE.shot = LIFE_STATE.loop = LIFE_STATE.hold = LIFE_STATE.clipLoop = LIFE_STATE.gesture = null;
+    LIFE_BALL.mode = 'idle';
+    const box = $('lifeBtns'); if (box) box.innerHTML = '';
+    const st = $('lifeState'); if (st) st.textContent = '生活動作モデルは未配置です。「サンプルを配置し直す」で戻せます。';
+  }
   scene.remove(m.group);
   if (m.mixer) m.mixer.stopAllAction();
   toast('「' + m.name + '」を削除しました');
@@ -5116,6 +5152,263 @@ function loadFromFile(file) {
     toast('「' + file.name + '」を読み込みました');
   }, undefined, e => { URL.revokeObjectURL(url); toast('読み込みに失敗しました'); });
 }
+/* ---------------- 生活動作モデル（このトークで再構築したパーツ一式） ----------------
+   life-model.glb（67関節・指・65クリップ）と、生活動作スタジオの小道具
+   （ボール/バット/スマホ/本/皿/フライパン/アイロン/掃除機/椅子/マット）を
+   フィールド側の専用コントローラで動かす。 */
+let lifeModel = null;
+const LIFE_STATE = { shot: null, loop: null, hold: null, clipLoop: null, gesture: null };
+const LIFE_CUR = { action: null, clip: '' };
+const LIFE_BALL = { mode: 'idle', vel: null };
+const LIFE_BALL_META = {
+  throw: { mode: 'hand', rel: .52, vx: 7.5, vy: 2.4 },
+  shoot: { mode: 'hand', rel: .62, vx: 2.8, vy: 4.6 },
+  kick: { mode: 'ground', rel: .5, vx: 6.5, vy: 3.2 }
+};
+const LIFE_LABEL = {};
+const LIFE_DEFS = [
+  ['bow', 'お辞儀', 'shot'], ['wave', '手を振る', 'shot'], ['clap', '拍手', 'shot'],
+  ['stretch', '伸び', 'shot'], ['eat', '食べる', 'shot'], ['drink', '飲む', 'shot'],
+  ['jump', 'ジャンプ', 'shot'], ['pickup', '拾う', 'shot'], ['sneeze', 'くしゃみ', 'shot'],
+  ['guts', 'ガッツポーズ', 'shot'], ['itadakimasu', 'いただきます', 'shot'], ['brush', '歯磨き', 'shot'],
+  ['neckroll', '首回し', 'shot'], ['surprise', '驚く', 'shot'],
+  ['bow2', '最敬礼', 'shot'], ['yawn', 'あくび', 'shot'], ['scratch', '頭をかく', 'shot'],
+  ['banzai', 'バンザイ', 'shot'], ['stumble', 'おっとっと', 'shot'], ['cough', '咳', 'shot'], ['offer', '差し出す', 'shot'],
+  ['throw', '投げる', 'shot'], ['swing', '打つ', 'shot'], ['kick', '蹴る', 'shot'],
+  ['punch', 'パンチ', 'shot'], ['catch', '捕る', 'shot'], ['shoot', 'シュート', 'shot'],
+  ['tereru', '照れる', 'shot'], ['ochikomu', '落ち込む', 'shot'], ['okoru', '怒る', 'shot'],
+  ['yorokobu', '喜ぶ', 'shot'], ['hotto', 'ほっとする', 'shot'], ['peace', 'ピース', 'shot'],
+  ['hosu', '洗濯干し', 'shot'], ['pan', 'フライパン', 'shot'],
+  ['talk', '話す', 'loop'], ['sweep', '掃く', 'loop'], ['stir', '混ぜる', 'loop'], ['typing', 'タイピング', 'loop'],
+  ['write', '書く', 'loop'], ['wipe', '拭く', 'loop'], ['squatx', 'スクワット', 'loop'],
+  ['washdishes', '皿洗い', 'loop'], ['windowwipe', '窓拭き', 'loop'], ['kiru', '切る', 'loop'],
+  ['vacuum', '掃除機', 'loop'], ['iron', 'アイロン', 'loop'],
+  ['walk', '歩く', 'cliploop'], ['run', '走る', 'cliploop'],
+  ['sit', '座る', 'hold'], ['lie', '寝る', 'hold'], ['squat', 'しゃがむ', 'hold'],
+  ['seiza', '正座', 'hold'], ['agura', 'あぐら', 'hold'],
+  ['phone', 'スマホ', 'hold'], ['think', '考える', 'hold'], ['crossed', '腕組み', 'hold'], ['reading', '読書', 'hold'],
+  ['call', '電話', 'hold'], ['startdash', '走る構え', 'hold'], ['doya', 'ドヤ顔', 'hold'],
+  ['agree', 'うなずく', 'clip'], ['headshake', '首をふる', 'clip'], ['sad_pose', 'しょんぼり', 'clip']
+];
+LIFE_DEFS.forEach(d => { LIFE_LABEL[d[0]] = d[1]; });
+
+function lifeStart(name, loopMode, clamp) {
+  if (!lifeModel || !lifeModel.lifeActions) return null;
+  const a = lifeModel.lifeActions[name]; if (!a) return null;
+  a.reset(); a.setLoop(loopMode); a.clampWhenFinished = !!clamp;
+  a.setEffectiveWeight(1); a.fadeIn(.25); a.play();
+  if (LIFE_CUR.action && LIFE_CUR.action !== a) LIFE_CUR.action.fadeOut(.25);
+  LIFE_CUR.action = a; LIFE_CUR.clip = name;
+  lifeModel.action = a;
+  return a;
+}
+function lifeGoIdle() { if (LIFE_CUR.clip !== 'idle') lifeStart('idle', THREE.LoopRepeat, false); }
+function lifeOnFinished(e) {
+  if (!lifeModel) return;
+  if (LIFE_STATE.shot && e.action === lifeModel.lifeActions[LIFE_STATE.shot]) { LIFE_STATE.shot = null; lifeGoIdle(); refreshLifeButtons(); }
+  else if (LIFE_STATE.gesture && e.action === lifeModel.lifeActions[LIFE_STATE.gesture]) { LIFE_STATE.gesture = null; lifeGoIdle(); refreshLifeButtons(); }
+}
+function lifePlayShot(name) {
+  if (!lifeModel) return;
+  LIFE_STATE.loop = LIFE_STATE.hold = LIFE_STATE.clipLoop = LIFE_STATE.gesture = null;
+  LIFE_STATE.shot = name;
+  const meta = LIFE_BALL_META[name], ball = lifeModel.lifeProps.ball;
+  if (meta && meta.mode === 'hand') LIFE_BALL.mode = 'hand';
+  else if (meta && meta.mode === 'ground') { ball.position.set(0, .045, .55); LIFE_BALL.mode = 'ground'; }
+  else if (LIFE_BALL.mode === 'hand') LIFE_BALL.mode = 'idle';
+  lifeStart(name, THREE.LoopOnce, false);
+  refreshLifeButtons();
+}
+function lifeToggleLoop(name) {
+  if (!lifeModel) return;
+  if (LIFE_STATE.loop === name) { LIFE_STATE.loop = null; lifeGoIdle(); }
+  else {
+    LIFE_STATE.loop = name; LIFE_STATE.shot = LIFE_STATE.hold = LIFE_STATE.clipLoop = LIFE_STATE.gesture = null;
+    lifeStart(name, THREE.LoopRepeat, false);
+    toast(LIFE_LABEL[name] + '（もう一度押すと終了）');
+  }
+  refreshLifeButtons();
+}
+function lifeTogglePose(name) {
+  if (!lifeModel) return;
+  if (LIFE_STATE.hold === name) { LIFE_STATE.hold = null; lifeGoIdle(); }
+  else {
+    LIFE_STATE.hold = name; LIFE_STATE.shot = LIFE_STATE.loop = LIFE_STATE.clipLoop = LIFE_STATE.gesture = null;
+    lifeStart(name, THREE.LoopOnce, true);
+    toast(LIFE_LABEL[name] + '（もう一度押すと解除）');
+  }
+  refreshLifeButtons();
+}
+function lifeToggleClipLoop(name) {
+  if (!lifeModel) return;
+  if (LIFE_STATE.clipLoop === name) { LIFE_STATE.clipLoop = null; lifeGoIdle(); }
+  else {
+    LIFE_STATE.clipLoop = name; LIFE_STATE.shot = LIFE_STATE.loop = LIFE_STATE.hold = LIFE_STATE.gesture = null;
+    lifeStart(name, THREE.LoopRepeat, false);
+    toast(LIFE_LABEL[name] + '（もう一度押すと停止）');
+  }
+  refreshLifeButtons();
+}
+function lifePlayGesture(name) {
+  if (!lifeModel) return;
+  LIFE_STATE.shot = LIFE_STATE.loop = LIFE_STATE.hold = LIFE_STATE.clipLoop = null;
+  LIFE_STATE.gesture = name;
+  lifeStart(name, THREE.LoopOnce, false);
+  refreshLifeButtons();
+}
+function lifeStopAll() {
+  if (!lifeModel) return;
+  LIFE_STATE.shot = LIFE_STATE.loop = LIFE_STATE.hold = LIFE_STATE.clipLoop = LIFE_STATE.gesture = null;
+  LIFE_BALL.mode = 'idle';
+  lifeGoIdle();
+  refreshLifeButtons();
+}
+function refreshLifeButtons() {
+  document.querySelectorAll('#lifeBtns button').forEach(b => {
+    const n = b.dataset.name, k = b.dataset.kind;
+    const on = (k === 'loop' && LIFE_STATE.loop === n) || (k === 'hold' && LIFE_STATE.hold === n) ||
+      (k === 'shot' && LIFE_STATE.shot === n) || (k === 'cliploop' && LIFE_STATE.clipLoop === n) ||
+      (k === 'clip' && LIFE_STATE.gesture === n);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  const st = $('lifeState');
+  if (st) {
+    if (!lifeModel) st.textContent = '生活動作モデルは未配置です。「サンプルを配置し直す」で戻せます。';
+    else {
+      const cur = LIFE_STATE.shot || LIFE_STATE.loop || LIFE_STATE.hold || LIFE_STATE.clipLoop || LIFE_STATE.gesture;
+      st.textContent = cur ? '再生中：' + (LIFE_LABEL[cur] || cur) : '待機中（アイドル）。ボタンで全64種の動作を再生できます。';
+    }
+  }
+}
+function buildLifeButtons() {
+  const box = $('lifeBtns'); if (!box) return;
+  box.innerHTML = '';
+  LIFE_DEFS.forEach(([name, label, kind]) => {
+    if (!lifeModel.lifeActions[name]) return;
+    const b = document.createElement('button');
+    b.dataset.name = name; b.dataset.kind = kind;
+    b.innerHTML = label + '<small>' + (kind === 'shot' ? 'ONE-SHOT' : kind === 'hold' ? 'ON/OFF' : 'LOOP') + '</small>';
+    b.onclick = () => {
+      setSelected(lifeModel);
+      if (kind === 'shot') lifePlayShot(name);
+      else if (kind === 'loop') lifeToggleLoop(name);
+      else if (kind === 'hold') lifeTogglePose(name);
+      else if (kind === 'cliploop') lifeToggleClipLoop(name);
+      else lifePlayGesture(name);
+    };
+    box.appendChild(b);
+  });
+  const stop = $('lifeStop'); if (stop) stop.onclick = () => { lifeStopAll(); toast('生活動作を止めました'); };
+  refreshLifeButtons();
+}
+function buildLifeProps(m) {
+  const P = {};
+  const wood = new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .8 });
+  const chair = new THREE.Group();
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(.52, .05, .48), wood); seat.position.y = .45; chair.add(seat);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(.52, .58, .05), wood); back.position.set(0, .76, -.24); chair.add(back);
+  [[-.23, -.21], [.23, -.21], [-.23, .21], [.23, .21]].forEach(([x, z]) => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(.022, .022, .45), wood);
+    leg.position.set(x, .225, z); chair.add(leg);
+  });
+  chair.visible = false; m.group.add(chair); P.chair = chair;
+  const mat = new THREE.Group();
+  const m1 = new THREE.Mesh(new THREE.BoxGeometry(.88, .06, 2.0), new THREE.MeshStandardMaterial({ color: 0x7fb2d9, roughness: 1 }));
+  m1.position.y = .03; m1.receiveShadow = true; mat.add(m1);
+  const pillow = new THREE.Mesh(new THREE.BoxGeometry(.5, .09, .3), new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 1 }));
+  pillow.position.set(0, .09, -.78); mat.add(pillow);
+  mat.position.set(0, 0, -.55); mat.visible = false; m.group.add(mat); P.mat = mat;
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(.045, 20, 16), new THREE.MeshStandardMaterial({ color: 0xf5f2ea, roughness: .45 }));
+  ball.visible = false; m.group.add(ball); P.ball = ball;
+  const phone = new THREE.Mesh(new THREE.BoxGeometry(.075, .15, .012), new THREE.MeshStandardMaterial({ color: 0x222831, roughness: .4, metalness: .3 }));
+  phone.position.set(0, .05, .02); phone.rotation.x = -1.2; phone.visible = false; P.phone = phone;
+  const book = new THREE.Group();
+  book.add(new THREE.Mesh(new THREE.BoxGeometry(.27, .19, .014), new THREE.MeshStandardMaterial({ color: 0x9c4a2f, roughness: .7 })));
+  book.add(new THREE.Mesh(new THREE.BoxGeometry(.25, .17, .017), new THREE.MeshStandardMaterial({ color: 0xf7f3e6, roughness: 1 })));
+  book.position.set(0, .08, .03); book.rotation.x = -1.15; book.visible = false; P.book = book;
+  const bat = new THREE.Group();
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(.017, .023, .74, 10), new THREE.MeshStandardMaterial({ color: 0xc9a15e, roughness: .55 }));
+  barrel.position.y = .37; bat.add(barrel);
+  const knob = new THREE.Mesh(new THREE.CylinderGeometry(.026, .026, .02, 10), new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .7 }));
+  knob.position.y = .005; bat.add(knob);
+  bat.position.set(0, .04, .01); bat.rotation.x = -1.35; bat.visible = false; P.bat = bat;
+  const plateG = new THREE.Group();
+  plateG.add(new THREE.Mesh(new THREE.CylinderGeometry(.105, .07, .018, 24), new THREE.MeshStandardMaterial({ color: 0xf2f4f6, roughness: .35 })));
+  plateG.position.set(0, .05, .01); plateG.rotation.x = -1.5; plateG.visible = false; P.plate = plateG;
+  const pan = new THREE.Group();
+  pan.add(new THREE.Mesh(new THREE.CylinderGeometry(.125, .105, .035, 24), new THREE.MeshStandardMaterial({ color: 0x3a3f45, roughness: .4, metalness: .5 })));
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(.03, .015, .17), new THREE.MeshStandardMaterial({ color: 0x22252a, roughness: .6 }));
+  handle.position.set(0, .01, .2); pan.add(handle);
+  pan.position.set(0, .04, .01); pan.rotation.x = -1.55; pan.visible = false; P.pan = pan;
+  const iron = new THREE.Group();
+  iron.add(new THREE.Mesh(new THREE.BoxGeometry(.095, .035, .2), new THREE.MeshStandardMaterial({ color: 0xb9c0c7, roughness: .3, metalness: .6 })));
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(.04, .045, .11), new THREE.MeshStandardMaterial({ color: 0x37404a, roughness: .6 }));
+  grip.position.set(0, .055, -.01); iron.add(grip);
+  iron.position.set(0, .04, .01); iron.rotation.x = -1.35; iron.visible = false; P.iron = iron;
+  const vac = new THREE.Group();
+  const stick = new THREE.Mesh(new THREE.CylinderGeometry(.013, .013, .9, 8), new THREE.MeshStandardMaterial({ color: 0x8b9299, roughness: .4, metalness: .4 }));
+  stick.position.y = .45; vac.add(stick);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(.24, .05, .09), new THREE.MeshStandardMaterial({ color: 0x5b7fa6, roughness: .5 }));
+  head.position.set(0, .9, .02); vac.add(head);
+  vac.position.set(0, .03, .01); vac.rotation.x = 1.75; vac.visible = false; P.vac = vac;
+  Object.values(P).forEach(o => o.traverse(x => { if (x.isMesh) { x.castShadow = true; } }));
+  const L = m.lifeBones['LeftHand'], R = m.lifeBones['RightHand'];
+  if (L) { L.add(phone); L.add(book); L.add(plateG); }
+  if (R) { R.add(bat); R.add(pan); R.add(iron); R.add(vac); }
+  LIFE_BALL.vel = new THREE.Vector3();
+  return P;
+}
+function setupLifeModel(m) {
+  lifeModel = m;
+  m.lifeActions = {};
+  m.clips.forEach(c => { m.lifeActions[c.name.toLowerCase()] = m.mixer.clipAction(c); });
+  m.lifeBones = {};
+  m.obj.traverse(o => {
+    if (o.isBone) {
+      const s = (o.name || '').replace(/^mixamorig:?/, '');
+      if (!m.lifeBones[s]) m.lifeBones[s] = o;
+    }
+  });
+  m.lifeProps = buildLifeProps(m);
+  m.mixer.addEventListener('finished', lifeOnFinished);
+  LIFE_STATE.shot = LIFE_STATE.loop = LIFE_STATE.hold = LIFE_STATE.clipLoop = LIFE_STATE.gesture = null;
+  LIFE_BALL.mode = 'idle';
+  lifeStart('idle', THREE.LoopRepeat, false);
+  buildLifeButtons();
+}
+function updateLifeModel(dt) {
+  if (!lifeModel || models.indexOf(lifeModel) < 0 || !lifeModel.lifeProps) return;
+  const P = lifeModel.lifeProps;
+  P.bat.visible = LIFE_STATE.shot === 'swing';
+  P.plate.visible = LIFE_STATE.loop === 'washdishes';
+  P.pan.visible = LIFE_STATE.shot === 'pan';
+  P.iron.visible = LIFE_STATE.loop === 'iron';
+  P.vac.visible = LIFE_STATE.loop === 'vacuum';
+  P.phone.visible = LIFE_STATE.hold === 'phone' || LIFE_STATE.hold === 'call';
+  P.book.visible = LIFE_STATE.hold === 'reading';
+  P.chair.visible = LIFE_STATE.hold === 'sit';
+  P.mat.visible = LIFE_STATE.hold === 'lie';
+  const ball = P.ball, meta = LIFE_BALL_META[LIFE_STATE.shot];
+  ball.visible = LIFE_BALL.mode !== 'idle';
+  if (LIFE_BALL.mode === 'hand') {
+    const hand = lifeModel.lifeBones['RightHand'];
+    if (hand) { const wp = new THREE.Vector3(); hand.getWorldPosition(wp); ball.position.copy(lifeModel.group.worldToLocal(wp)); }
+    const a = LIFE_STATE.shot ? lifeModel.lifeActions[LIFE_STATE.shot] : null;
+    if (meta && a && a.getClip().duration > 0 && a.time / a.getClip().duration >= meta.rel) {
+      LIFE_BALL.vel.set(0, meta.vy, meta.vx); LIFE_BALL.mode = 'fly';
+    }
+  } else if (LIFE_BALL.mode === 'ground') {
+    const a = LIFE_STATE.shot ? lifeModel.lifeActions[LIFE_STATE.shot] : null;
+    if (meta && a && a.getClip().duration > 0 && a.time / a.getClip().duration >= meta.rel) {
+      LIFE_BALL.vel.set(0, meta.vy, meta.vx); LIFE_BALL.mode = 'fly';
+    }
+  } else if (LIFE_BALL.mode === 'fly') {
+    LIFE_BALL.vel.y -= 8.3 * dt;
+    ball.position.addScaledVector(LIFE_BALL.vel, dt);
+    if (ball.position.y <= .045) { ball.position.y = .045; LIFE_BALL.mode = 'rest'; }
+  }
+}
+
 function frameModel(m, onlyCamera) {
   const bbox = new THREE.Box3().setFromObject(m.obj);
   const center = bbox.getCenter(new THREE.Vector3());
@@ -5133,13 +5426,20 @@ function refreshModelList() {
     const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = m.name; nm.title = m.name;
     nm.onclick = () => setSelected(m === selected ? null : m);
     row.appendChild(nm);
-    if (m.clips.length) {
+    if (m.life) {
+      const go = document.createElement('button');
+      go.textContent = '🎬';
+      go.title = '生活動作パネルへ（全64種）';
+      go.onclick = () => { setSelected(m); const h = $('lifeHead'); if (h) h.scrollIntoView({ block: 'nearest' }); };
+      row.appendChild(go);
+    }
+    if (m.clips.length && !m.life) {
       const sel = document.createElement('select');
       m.clips.forEach((c, i) => { const o = document.createElement('option'); o.value = i; o.textContent = c.name || ('アニメ' + (i + 1)); sel.appendChild(o); });
       sel.onchange = () => { if (m.action) m.action.stop(); m.action = m.mixer.clipAction(m.clips[Number(sel.value)]); m.action.play(); };
       row.appendChild(sel);
     }
-    if (m.clips.length) {
+    if (m.clips.length && !m.life) {
       const pp = document.createElement('button');
       pp.textContent = (m.action && !m.action.paused) ? '⏸' : '▶';
       pp.title = '再生/一時停止';
@@ -5165,35 +5465,431 @@ function b64ToBuf(b64) {
 async function sampleBuf(which) {
   // Pages版（SAMPLE_FETCH）はモデルを別ファイルから取得、単一ファイル版は埋め込みbase64を使う
   if (typeof SAMPLE_FETCH !== 'undefined' && SAMPLE_FETCH) {
-    const t = await (await fetch(which === 'm' ? SAMPLE_M_URL : SAMPLE_F_URL)).text();
+    const url = which === 'm' ? SAMPLE_M_URL : which === 'f' ? SAMPLE_F_URL : SAMPLE_LIFE_URL;
+    const t = await (await fetch(url)).text();
     return b64ToBuf(t);
   }
-  return b64ToBuf(which === 'm' ? SAMPLE_M : SAMPLE_F);
+  return b64ToBuf(which === 'm' ? SAMPLE_M : which === 'f' ? SAMPLE_F : SAMPLE_LIFE);
 }
 async function placeSamples() {
   [...models].forEach(removeModel);
   try {
-    loader.parse(await sampleBuf('m'), '', g => {
-      const m = registerModel(g.scene, 'human.glb（男性）', g.animations);
-      m.group.position.x = -0.55; setSelected(null); // 起動時は未選択
+    const bufs = await Promise.all([sampleBuf('m'), sampleBuf('life'), sampleBuf('f')]);
+    loader.parse(bufs[0], '', g => {
+      const m = registerModel(g.scene, 'human.glb（男性）', g.animations, { role: 'm' });
+      m.group.position.x = -1.08; setSelected(null); // 起動時は未選択
     }, e => { console.error(e); toast('サンプルの読み込みに失敗しました'); });
-    loader.parse(await sampleBuf('f'), '', g => {
-      const m = registerModel(g.scene, 'human-f.glb（女性）', g.animations);
-      m.group.position.x = 0.55;
+    loader.parse(bufs[1], '', g => {
+      const m = registerModel(g.scene, 'life-model.glb（生活動作）', g.animations, { life: true, role: 'life' });
+      m.group.position.x = 0;
+      setSelected(null);
+    }, e => { console.error(e); toast('生活動作モデルの読み込みに失敗しました'); });
+    loader.parse(bufs[2], '', g => {
+      const m = registerModel(g.scene, 'human-f.glb（女性）', g.animations, { role: 'f' });
+      m.group.position.x = 1.08;
       setSelected(null); // 起動時は未選択（枠を出さない）
     }, e => { console.error(e); toast('サンプルの読み込みに失敗しました'); });
   } catch (err) { console.error(err); toast('サンプルの読み込みに失敗しました'); }
 }
 
+/* ---------------- シーン（街並み・屋内・田舎・ホテル） ----------------
+   手続き生成の小道具で場所を作る。切替時はグループごと差し替える */
+function smat(c, rough, metal) {
+  const m = new THREE.MeshStandardMaterial({ roughness: rough == null ? 0.9 : rough, metalness: metal || 0 });
+  m.color.setRGB(s2l(c[0]), s2l(c[1]), s2l(c[2]));
+  return m;
+}
+function smesh(geo, material, x, y, z) {
+  const o = new THREE.Mesh(geo, material);
+  o.position.set(x || 0, y || 0, z || 0);
+  o.castShadow = true; o.receiveShadow = true;
+  return o;
+}
+function facadeTexture(base, win) {
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 512;
+  const x = cv.getContext('2d');
+  x.fillStyle = base; x.fillRect(0, 0, 256, 512);
+  let seed = 777; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  for (let r = 0; r < 10; r++) for (let c = 0; c < 5; c++) {
+    const px = 18 + c * 44, py = 22 + r * 46;
+    x.fillStyle = rnd() > 0.72 ? '#cfd8de' : win;
+    x.fillRect(px, py, 26, 24);
+    x.fillStyle = 'rgba(255,255,255,0.20)'; x.fillRect(px, py, 26, 5);
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+  return t;
+}
+function building(w, h, d, tint, base) {
+  const side = new THREE.MeshStandardMaterial({ map: facadeTexture(base, '#2c3844'), roughness: 0.92 });
+  side.color.setRGB(s2l(tint[0]), s2l(tint[1]), s2l(tint[2]));
+  const roof = smat([0.23, 0.24, 0.26], 0.95);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [side, side, roof, roof, side, side]);
+  m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+function buildCity() {
+  const g = new THREE.Group();
+  const road = smesh(new THREE.PlaneGeometry(64, 6.4), smat([0.16, 0.16, 0.17], 0.97), 0, 0.01, 0);
+  road.rotation.x = -Math.PI / 2; road.castShadow = false; g.add(road);
+  const lineM = smat([0.85, 0.85, 0.82], 0.8);
+  for (let x = -30; x <= 30; x += 4) { if (Math.abs(x) < 3.6) continue;
+    const dash = smesh(new THREE.BoxGeometry(1.7, 0.012, 0.22), lineM, x, 0.016, 0); dash.castShadow = false; g.add(dash); }
+  const walkM = smat([0.62, 0.63, 0.65], 0.95);
+  [-4.05, 4.05].forEach(z => { const w = smesh(new THREE.BoxGeometry(64, 0.12, 1.7), walkM, 0, 0.06, z); w.castShadow = false; g.add(w); });
+  for (let i = 0; i < 5; i++) { const s = smesh(new THREE.BoxGeometry(0.55, 0.012, 5.6), lineM, -1.4 + i * 0.7, 0.016, 0); s.castShadow = false; g.add(s); }
+  const specs = [
+    [-20, -9.5, 8, 15, 7, '#b9b3a6', [0.95, 0.93, 0.88]], [-11, -10, 7, 21, 8, '#a8b0b8', [0.90, 0.93, 0.97]],
+    [-3.5, -10.5, 6, 10, 7, '#c2a894', [0.97, 0.92, 0.85]], [4.5, -10, 7, 17, 8, '#9aa4ae', [0.92, 0.95, 1.0]],
+    [13, -9.5, 8, 12, 7, '#b5a48e', [0.96, 0.90, 0.82]], [21.5, -10, 7, 19, 8, '#a3aab2', [0.93, 0.94, 0.96]],
+    [-19, 10, 8, 13, 7, '#afa79a', [0.94, 0.92, 0.88]], [-10.5, 10.5, 7, 18, 8, '#9fb2bd', [0.90, 0.94, 0.98]],
+    [-2.5, 10, 6, 9, 7, '#c0b49c', [0.95, 0.91, 0.84]], [5.5, 10.5, 7, 15, 8, '#a8aeb6', [0.92, 0.93, 0.95]],
+    [14, 10, 8, 20, 7, '#b2a08a', [0.96, 0.90, 0.83]], [22, 10.5, 7, 11, 8, '#a0a8b0', [0.93, 0.95, 0.97]]
+  ];
+  specs.forEach(s => { const b = building(s[2], s[3], s[4], s[6], s[5]); b.position.set(s[0], s[3] / 2, s[1]); g.add(b); });
+  const poleM = smat([0.20, 0.21, 0.23], 0.6, 0.6);
+  const lampM = new THREE.MeshStandardMaterial({ roughness: 0.4, emissive: 0xffdf9e, emissiveIntensity: 0.9 });
+  lampM.color.setRGB(s2l(0.40), s2l(0.38), s2l(0.30));
+  for (let x = -25; x <= 25; x += 10) {
+    [-3.6, 3.6].forEach((z, i) => { if (((x + 25) / 10 + i) % 2) return;
+      const p = new THREE.Group();
+      p.add(smesh(new THREE.CylinderGeometry(0.05, 0.07, 4.6, 8), poleM, 0, 2.3, 0));
+      const dir = z > 0 ? -1 : 1;
+      p.add(smesh(new THREE.BoxGeometry(0.08, 0.08, 1.1), poleM, 0, 4.55, dir * 0.5));
+      const lamp = smesh(new THREE.BoxGeometry(0.34, 0.09, 0.5), lampM, 0, 4.5, dir * 1.0); lamp.castShadow = false; p.add(lamp);
+      p.position.set(x + (i ? 2.5 : 0), 0.12, z); g.add(p);
+    });
+  }
+  function car(color, x, z, ry) {
+    const c = new THREE.Group();
+    const body = smat(color, 0.35, 0.5);
+    c.add(smesh(new THREE.BoxGeometry(1.7, 0.42, 0.78), body, 0, 0.42, 0));
+    c.add(smesh(new THREE.BoxGeometry(0.92, 0.36, 0.7), smat([0.10, 0.11, 0.13], 0.15, 0.4), -0.08, 0.79, 0));
+    const wm = smat([0.05, 0.05, 0.05], 0.9);
+    [[-0.55, -0.4], [0.55, -0.4], [-0.55, 0.4], [0.55, 0.4]].forEach(w => {
+      const wh = smesh(new THREE.CylinderGeometry(0.21, 0.21, 0.12, 14), wm, w[0], 0.21, w[1]);
+      wh.rotation.x = Math.PI / 2; c.add(wh); });
+    c.position.set(x, 0.02, z); c.rotation.y = ry; return c;
+  }
+  g.add(car([0.62, 0.16, 0.14], -7.5, -1.6, 0));
+  g.add(car([0.16, 0.28, 0.55], 9, 1.6, Math.PI));
+  const planterM = smat([0.45, 0.42, 0.40], 0.9);
+  const bushM = smat([0.25, 0.45, 0.22], 1);
+  [-3.6, 3.6, -8.5, 8.5].forEach(x => {
+    g.add(smesh(new THREE.BoxGeometry(1.1, 0.42, 0.6), planterM, x, 0.33, 4.05));
+    g.add(smesh(new THREE.IcosahedronGeometry(0.42, 1), bushM, x, 0.78, 4.05));
+  });
+  return g;
+}
+function buildIndoor() {
+  const g = new THREE.Group();
+  const W = 9, D = 7, H = 3.2;
+  const floorTex = new THREE.CanvasTexture(makeGroundCanvas('wood'));
+  floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(3, 2.4);
+  floorTex.encoding = THREE.sRGBEncoding; floorTex.anisotropy = 8;
+  const floorM = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.7 });
+  floorM.color.setRGB(s2l(0.62), s2l(0.47), s2l(0.32));
+  const floor = smesh(new THREE.BoxGeometry(W, 0.1, D), floorM, 0, -0.05, 0); floor.castShadow = false; g.add(floor);
+  const wallM = smat([0.92, 0.89, 0.84], 0.95);
+  const accentM = smat([0.72, 0.76, 0.70], 0.95);
+  const bw = new THREE.Group();
+  const seg = (w, h, x, y) => bw.add(smesh(new THREE.BoxGeometry(w, h, 0.15), accentM, x, y, 0));
+  seg(1.9, H, -3.55, H / 2); seg(4.7, H, 2.15, H / 2); seg(2.4, 0.85, -1.4, 0.425); seg(2.4, 0.85, -1.4, 2.775);
+  bw.position.z = -D / 2; g.add(bw);
+  const frameM = smat([0.35, 0.26, 0.18], 0.6);
+  const fr = (w, h, x, y) => g.add(smesh(new THREE.BoxGeometry(w, h, 0.08), frameM, x, y, -D / 2));
+  fr(2.5, 0.07, -1.4, 2.36); fr(2.5, 0.07, -1.4, 0.84); fr(0.07, 1.56, -2.62, 1.6); fr(0.07, 1.56, -0.18, 1.6); fr(0.05, 1.5, -1.4, 1.6);
+  const glassM = new THREE.MeshStandardMaterial({ roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.30 });
+  glassM.color.setRGB(s2l(0.75), s2l(0.85), s2l(0.95));
+  const glass = smesh(new THREE.PlaneGeometry(2.4, 1.5), glassM, -1.4, 1.6, -D / 2 - 0.02); glass.castShadow = false; g.add(glass);
+  const glowM = new THREE.MeshBasicMaterial({}); glowM.color.setRGB(2.0, 2.1, 2.05);
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2.5), glowM);
+  glow.position.set(-1.4, 1.6, -D / 2 - 0.6); g.add(glow);
+  g.add(smesh(new THREE.BoxGeometry(0.15, H, D), wallM, -W / 2, H / 2, 0));
+  g.add(smesh(new THREE.BoxGeometry(0.15, H, D), wallM, W / 2, H / 2, 0));
+  const ceil = smesh(new THREE.BoxGeometry(W, 0.12, D), smat([0.95, 0.94, 0.92], 0.95), 0, H + 0.06, 0); ceil.castShadow = false; g.add(ceil);
+  const rug = smesh(new THREE.BoxGeometry(3.2, 0.025, 2.3), smat([0.62, 0.34, 0.26], 1), -1.9, 0.013, -1.1); rug.castShadow = false; g.add(rug);
+  const sofaM = smat([0.36, 0.44, 0.52], 1);
+  const sofaC = smat([0.42, 0.50, 0.58], 1);
+  const sofa = new THREE.Group();
+  sofa.add(smesh(new THREE.BoxGeometry(2.3, 0.42, 0.95), sofaM, 0, 0.30, 0));
+  sofa.add(smesh(new THREE.BoxGeometry(2.3, 0.62, 0.24), sofaM, 0, 0.72, -0.36));
+  [-1.03, 1.03].forEach(x => sofa.add(smesh(new THREE.BoxGeometry(0.24, 0.34, 0.95), sofaM, x, 0.62, 0)));
+  [-0.52, 0.52].forEach(x => sofa.add(smesh(new THREE.BoxGeometry(0.98, 0.14, 0.82), sofaC, x, 0.55, 0.03)));
+  sofa.position.set(-1.9, 0, -2.35); g.add(sofa);
+  const tableM = smat([0.30, 0.21, 0.14], 0.55);
+  g.add(smesh(new THREE.BoxGeometry(1.15, 0.05, 0.6), tableM, -1.9, 0.36, -1.15));
+  [[-0.5, -0.22], [0.5, -0.22], [-0.5, 0.22], [0.5, 0.22]].forEach(o =>
+    g.add(smesh(new THREE.BoxGeometry(0.05, 0.34, 0.05), tableM, -1.9 + o[0], 0.17, -1.15 + o[1])));
+  g.add(smesh(new THREE.BoxGeometry(0.45, 0.4, 1.9), tableM, 4.15, 0.2, -0.6));
+  g.add(smesh(new THREE.BoxGeometry(0.05, 0.85, 1.5), smat([0.03, 0.03, 0.035], 0.4), 4.38, 1.35, -0.6));
+  const screenM = new THREE.MeshStandardMaterial({ roughness: 0.25, emissive: 0x1a2e44, emissiveIntensity: 0.7 });
+  screenM.color.setRGB(s2l(0.05), s2l(0.07), s2l(0.10));
+  const screen = smesh(new THREE.PlaneGeometry(1.4, 0.75), screenM, 4.35, 1.35, -0.6);
+  screen.rotation.y = -Math.PI / 2; screen.castShadow = false; g.add(screen);
+  const shelf = new THREE.Group();
+  const shelfM = smat([0.42, 0.30, 0.19], 0.7);
+  [0.25, 0.85, 1.45].forEach(y => shelf.add(smesh(new THREE.BoxGeometry(0.28, 0.04, 1.5), shelfM, 0, y, 0)));
+  [-0.72, 0.72].forEach(z => shelf.add(smesh(new THREE.BoxGeometry(0.28, 1.6, 0.04), shelfM, 0, 0.8, z)));
+  const bookCols = [[0.60, 0.25, 0.22], [0.22, 0.38, 0.55], [0.75, 0.55, 0.20], [0.30, 0.50, 0.32], [0.55, 0.30, 0.50]];
+  let bseed = 31; const brnd = () => { bseed = (bseed * 16807) % 2147483647; return bseed / 2147483647; };
+  [0.27, 0.87, 1.47].forEach(y => { let z = -0.62;
+    while (z < 0.55) { const bw2 = 0.05 + brnd() * 0.05, bh = 0.24 + brnd() * 0.12;
+      shelf.add(smesh(new THREE.BoxGeometry(0.17, bh, bw2), smat(bookCols[Math.floor(brnd() * 5)], 0.85), 0, y + bh / 2, z + bw2 / 2));
+      z += bw2 + 0.012; } });
+  shelf.position.set(-4.28, 0, 0.9); g.add(shelf);
+  g.add(smesh(new THREE.CylinderGeometry(0.55, 0.55, 0.04, 20), tableM, 2.6, 0.72, -2.2));
+  g.add(smesh(new THREE.CylinderGeometry(0.05, 0.07, 0.7, 10), tableM, 2.6, 0.36, -2.2));
+  [[2.6, -3.05, Math.PI], [2.6, -1.35, 0]].forEach(c => {
+    const ch = new THREE.Group();
+    ch.add(smesh(new THREE.BoxGeometry(0.42, 0.04, 0.42), tableM, 0, 0.45, 0));
+    ch.add(smesh(new THREE.BoxGeometry(0.42, 0.5, 0.04), tableM, 0, 0.72, -0.19));
+    [[-0.17, -0.17], [0.17, -0.17], [-0.17, 0.17], [0.17, 0.17]].forEach(o =>
+      ch.add(smesh(new THREE.BoxGeometry(0.035, 0.45, 0.035), tableM, o[0], 0.225, o[1])));
+    ch.position.set(c[0], 0, c[1]); ch.rotation.y = c[2]; g.add(ch); });
+  const lampMetal = smat([0.15, 0.15, 0.16], 0.5, 0.6);
+  g.add(smesh(new THREE.CylinderGeometry(0.16, 0.18, 0.03, 14), lampMetal, -3.6, 0.015, -2.9));
+  g.add(smesh(new THREE.CylinderGeometry(0.02, 0.02, 1.5, 8), lampMetal, -3.6, 0.78, -2.9));
+  const shadeM = new THREE.MeshStandardMaterial({ roughness: 0.9, emissive: 0xffbe78, emissiveIntensity: 0.55, side: THREE.DoubleSide });
+  shadeM.color.setRGB(s2l(0.98), s2l(0.90), s2l(0.75));
+  const shade = smesh(new THREE.CylinderGeometry(0.16, 0.22, 0.26, 14, 1, true), shadeM, -3.6, 1.58, -2.9);
+  shade.castShadow = false; g.add(shade);
+  const lampLight = new THREE.PointLight(0xffc98c, 0.55, 8, 2); lampLight.position.set(-3.6, 1.5, -2.9); g.add(lampLight);
+  g.add(smesh(new THREE.CylinderGeometry(0.012, 0.012, 0.7, 6), smat([0.1, 0.1, 0.1], 0.6), 0.4, 2.85, -0.4));
+  g.add(smesh(new THREE.CylinderGeometry(0.07, 0.30, 0.24, 16, 1, true), smat([0.16, 0.17, 0.19], 0.4, 0.5), 0.4, 2.42, -0.4));
+  const bulbM = new THREE.MeshBasicMaterial({}); bulbM.color.setRGB(2.4, 2.0, 1.5);
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), bulbM); bulb.position.set(0.4, 2.36, -0.4); g.add(bulb);
+  const pLight = new THREE.PointLight(0xffd9a6, 0.5, 10, 2); pLight.position.set(0.4, 2.3, -0.4); g.add(pLight);
+  g.add(smesh(new THREE.CylinderGeometry(0.16, 0.12, 0.3, 12), smat([0.55, 0.30, 0.20], 0.8), 3.9, 0.15, 2.7));
+  const leafM = smat([0.22, 0.42, 0.20], 1);
+  [[0, 0.75, 0, 0.30], [0.14, 0.60, 0.08, 0.22], [-0.13, 0.62, -0.06, 0.24]].forEach(o =>
+    g.add(smesh(new THREE.IcosahedronGeometry(o[3], 1), leafM, 3.9 + o[0], o[1], 2.7 + o[2])));
+  const art = smesh(new THREE.PlaneGeometry(1.1, 0.8), smat([0.80, 0.55, 0.30], 0.9), 4.41, 1.9, 1.6);
+  art.rotation.y = -Math.PI / 2; art.castShadow = false; g.add(art);
+  const art2 = smesh(new THREE.PlaneGeometry(0.7, 0.55), smat([0.30, 0.45, 0.60], 0.9), 4.41, 1.85, 2.85);
+  art2.rotation.y = -Math.PI / 2; art2.castShadow = false; g.add(art2);
+  return g;
+}
+function roofPrism(w, h, d, capMat, sideMat) {
+  const shape = new THREE.Shape();
+  shape.moveTo(-w / 2, 0); shape.lineTo(w / 2, 0); shape.lineTo(0, h); shape.closePath();
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: d, bevelEnabled: false });
+  geo.translate(0, 0, -d / 2);
+  const m = new THREE.Mesh(geo, [capMat, sideMat]);
+  m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+function buildCountry() {
+  const g = new THREE.Group();
+  const dirtM = smat([0.50, 0.39, 0.25], 1);
+  const path = smesh(new THREE.PlaneGeometry(3, 46), dirtM, 0, 0.008, 0);
+  path.rotation.x = -Math.PI / 2; path.castShadow = false; g.add(path);
+  const path2 = smesh(new THREE.PlaneGeometry(9, 2.2), dirtM, -4.6, 0.009, -6);
+  path2.rotation.x = -Math.PI / 2; path2.castShadow = false; g.add(path2);
+  const house = new THREE.Group();
+  const wallHM = smat([0.94, 0.91, 0.84], 0.95);
+  house.add(smesh(new THREE.BoxGeometry(5.6, 2.9, 4.6), wallHM, 0, 1.45, 0));
+  const roof = roofPrism(6.4, 2.0, 5.4, wallHM, smat([0.60, 0.28, 0.18], 0.9));
+  roof.position.y = 2.9; house.add(roof);
+  house.add(smesh(new THREE.BoxGeometry(0.9, 1.9, 0.06), smat([0.35, 0.22, 0.12], 0.7), 0.2, 0.95, 2.32));
+  const winM = smat([0.16, 0.22, 0.28], 0.25, 0.2);
+  [-1.7, 1.8].forEach(x => house.add(smesh(new THREE.BoxGeometry(0.85, 0.95, 0.06), winM, x, 1.6, 2.32)));
+  house.add(smesh(new THREE.BoxGeometry(0.5, 1.1, 0.5), smat([0.55, 0.48, 0.44], 0.95), 1.6, 4.55, 0));
+  house.position.set(-9.5, 0, -6); house.rotation.y = 0.38; g.add(house);
+  const barn = new THREE.Group();
+  const barnM = smat([0.58, 0.22, 0.16], 0.95);
+  barn.add(smesh(new THREE.BoxGeometry(4.6, 2.7, 3.9), barnM, 0, 1.35, 0));
+  const broof = roofPrism(5.3, 1.7, 4.5, barnM, smat([0.35, 0.35, 0.37], 0.9));
+  broof.position.y = 2.7; barn.add(broof);
+  barn.add(smesh(new THREE.BoxGeometry(1.5, 1.9, 0.06), smat([0.30, 0.16, 0.10], 0.8), 0, 0.95, 1.97));
+  barn.position.set(9.5, 0, -9); barn.rotation.y = -0.3; g.add(barn);
+  const fenceM = smat([0.45, 0.33, 0.20], 1);
+  [-2.3, 2.3].forEach(x => {
+    for (let z = -13; z <= 11; z += 2.35) {
+      if (x < 0 && Math.abs(z + 6) < 1.3) continue;
+      g.add(smesh(new THREE.BoxGeometry(0.1, 0.95, 0.1), fenceM, x, 0.475, z));
+    }
+    [0.42, 0.78].forEach(y => {
+      if (x < 0) {
+        g.add(smesh(new THREE.BoxGeometry(0.05, 0.07, 5.4), fenceM, x, y, -10.2));
+        g.add(smesh(new THREE.BoxGeometry(0.05, 0.07, 15.4), fenceM, x, y, 3.2));
+      } else {
+        g.add(smesh(new THREE.BoxGeometry(0.05, 0.07, 24.5), fenceM, x, y, -1));
+      }
+    });
+  });
+  function tree(x, z, s) {
+    const t = new THREE.Group();
+    t.add(smesh(new THREE.CylinderGeometry(0.13 * s, 0.18 * s, 1.3 * s, 7), smat([0.36, 0.25, 0.15], 1), 0, 0.65 * s, 0));
+    const greens = [[0.24, 0.44, 0.20], [0.30, 0.50, 0.24], [0.20, 0.40, 0.19]];
+    const gm = smat(greens[(Math.abs(x * 7 + z * 13) | 0) % 3], 1);
+    t.add(smesh(new THREE.IcosahedronGeometry(1.15 * s, 1), gm, 0, 1.95 * s, 0));
+    t.add(smesh(new THREE.IcosahedronGeometry(0.8 * s, 1), gm, 0.5 * s, 1.55 * s, 0.25 * s));
+    t.add(smesh(new THREE.IcosahedronGeometry(0.7 * s, 1), gm, -0.5 * s, 1.6 * s, -0.2 * s));
+    t.position.set(x, 0, z); return t;
+  }
+  [[-15, -1, 1.2], [13, -3, 1.0], [-6, -15, 1.3], [17, -14, 1.1], [6, -19, 1.25], [-19, -11, 1.0],
+   [21, 5, 1.15], [-21, 7, 1.05], [15, 11, 0.95], [-14, 13, 1.2], [5, 15, 1.0], [-3, -22, 1.35],
+   [24, -6, 1.0], [-25, -4, 1.1]].forEach(p => g.add(tree(p[0], p[1], p[2])));
+  const hayM = smat([0.76, 0.60, 0.28], 1);
+  [[6.5, 4.5, 0.4], [7.6, 5.6, 1.2], [-7, 8.5, 0.9]].forEach(p => {
+    const h = smesh(new THREE.CylinderGeometry(0.58, 0.58, 0.95, 14), hayM, p[0], 0.58, p[1]);
+    h.rotation.z = Math.PI / 2; h.rotation.y = p[2]; g.add(h); });
+  const hillM = smat([0.30, 0.45, 0.24], 1);
+  [[-55, -70, 46, 10], [30, -80, 55, 13], [75, -45, 40, 8], [-85, -30, 44, 9], [0, -95, 60, 12]].forEach(p => {
+    const h = smesh(new THREE.SphereGeometry(p[2], 20, 14), hillM, p[0], -p[2] * 0.28 + p[3], p[1]);
+    h.scale.y = 0.28; h.castShadow = false; h.receiveShadow = false; g.add(h); });
+  let fseed = 97; const frnd = () => { fseed = (fseed * 16807) % 2147483647; return fseed / 2147483647; };
+  const fcols = [[0.85, 0.40, 0.45], [0.95, 0.80, 0.30], [0.90, 0.90, 0.88], [0.70, 0.45, 0.80]];
+  for (let i = 0; i < 42; i++) {
+    const side = frnd() > 0.5 ? 1 : -1;
+    const fx = side * (1.9 + frnd() * 1.6), fz = -14 + frnd() * 26;
+    const f = smesh(new THREE.BoxGeometry(0.09, 0.09, 0.09), smat(fcols[i % 4], 0.8), fx, 0.12, fz);
+    f.castShadow = false; g.add(f);
+    const st = smesh(new THREE.BoxGeometry(0.02, 0.12, 0.02), smat([0.25, 0.45, 0.2], 1), fx, 0.05, fz);
+    st.castShadow = false; g.add(st);
+  }
+  return g;
+}
+function hotelSignTexture() {
+  const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 256;
+  const x = cv.getContext('2d');
+  x.clearRect(0, 0, 1024, 256);
+  const grad = x.createLinearGradient(0, 40, 0, 200);
+  grad.addColorStop(0, '#f6dc8e'); grad.addColorStop(0.5, '#caa64f'); grad.addColorStop(1, '#f0d488');
+  x.fillStyle = grad; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.font = '600 118px Georgia, "Times New Roman", serif';
+  x.fillText('H O T E L', 512, 104);
+  x.font = '42px Georgia, serif'; x.fillText('★ ★ ★ ★ ★', 512, 198);
+  const t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+  return t;
+}
+function marbleTexture() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 512;
+  const x = cv.getContext('2d');
+  x.fillStyle = '#d9d4cc'; x.fillRect(0, 0, 512, 512);
+  let seed = 5150; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  for (let i = 0; i < 26; i++) {
+    x.strokeStyle = 'rgba(120,118,112,' + (0.05 + rnd() * 0.10).toFixed(3) + ')'; x.lineWidth = 1 + rnd() * 2;
+    x.beginPath(); let px = rnd() * 512, py = 0; x.moveTo(px, py);
+    while (py < 512) { px += (rnd() - 0.5) * 60; py += 30 + rnd() * 50; x.lineTo(px, py); } x.stroke();
+  }
+  x.strokeStyle = 'rgba(96,90,80,0.55)'; x.lineWidth = 3;
+  x.strokeRect(0, 0, 512, 512);
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 3);
+  t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+  return t;
+}
+function buildHotel() {
+  const g = new THREE.Group();
+  const W = 16, D = 11, H = 5;
+  const floorM = new THREE.MeshStandardMaterial({ map: marbleTexture(), roughness: 0.16, metalness: 0.05 });
+  floorM.color.setRGB(s2l(0.98), s2l(0.96), s2l(0.92));
+  const floor = smesh(new THREE.BoxGeometry(W, 0.1, D), floorM, 0, -0.05, 0); floor.castShadow = false; g.add(floor);
+  const wallM = smat([0.88, 0.82, 0.72], 0.92);
+  g.add(smesh(new THREE.BoxGeometry(W, H, 0.18), wallM, 0, H / 2, -D / 2));
+  g.add(smesh(new THREE.BoxGeometry(0.18, H, D), wallM, -W / 2, H / 2, 0));
+  g.add(smesh(new THREE.BoxGeometry(0.18, H, D), wallM, W / 2, H / 2, 0));
+  const ceil = smesh(new THREE.BoxGeometry(W, 0.14, D), smat([0.30, 0.25, 0.20], 0.95), 0, H + 0.07, 0); ceil.castShadow = false; g.add(ceil);
+  const goldM = smat([0.83, 0.65, 0.30], 0.3, 0.85);
+  const trim = smesh(new THREE.BoxGeometry(W, 0.09, 0.05), goldM, 0, 3.6, -D / 2 + 0.12); trim.castShadow = false; g.add(trim);
+  const panel = smesh(new THREE.BoxGeometry(7.2, 3.6, 0.12), smat([0.09, 0.12, 0.11], 0.6), 0, 1.8, -D / 2 + 0.16); g.add(panel);
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.9),
+    new THREE.MeshBasicMaterial({ map: hotelSignTexture(), transparent: true }));
+  sign.position.set(0, 2.75, -D / 2 + 0.23); g.add(sign);
+  g.add(smesh(new THREE.BoxGeometry(5.6, 1.12, 0.75), smat([0.26, 0.17, 0.11], 0.5), 0, 0.56, -3.9));
+  g.add(smesh(new THREE.BoxGeometry(5.9, 0.07, 0.95), floorM, 0, 1.16, -3.9));
+  const sconceM = new THREE.MeshStandardMaterial({ roughness: 0.5, emissive: 0xffc37a, emissiveIntensity: 1.1 });
+  sconceM.color.setRGB(s2l(0.50), s2l(0.40), s2l(0.25));
+  [-4.6, 4.6].forEach(x => { const s = smesh(new THREE.BoxGeometry(0.16, 0.34, 0.1), sconceM, x, 2.5, -D / 2 + 0.14); s.castShadow = false; g.add(s); });
+  const colM = new THREE.MeshStandardMaterial({ map: marbleTexture(), roughness: 0.3 });
+  colM.color.setRGB(s2l(0.99), s2l(0.97), s2l(0.94));
+  [[-5.6, -2.2], [5.6, -2.2], [-5.6, 2.6], [5.6, 2.6]].forEach(p => {
+    g.add(smesh(new THREE.CylinderGeometry(0.34, 0.38, H, 18), colM, p[0], H / 2, p[1]));
+    g.add(smesh(new THREE.CylinderGeometry(0.37, 0.37, 0.2, 18), goldM, p[0], 2.4, p[1]));
+    g.add(smesh(new THREE.BoxGeometry(0.95, 0.22, 0.95), colM, p[0], 0.11, p[1]));
+  });
+  const chand = new THREE.Group();
+  chand.add(smesh(new THREE.CylinderGeometry(0.03, 0.03, 1.1, 8), goldM, 0, -0.55, 0));
+  const ring = smesh(new THREE.TorusGeometry(0.85, 0.045, 10, 36), goldM, 0, -1.15, 0);
+  ring.rotation.x = Math.PI / 2; chand.add(ring);
+  const bulbM2 = new THREE.MeshBasicMaterial({}); bulbM2.color.setRGB(2.6, 2.1, 1.4);
+  for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2;
+    const b = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), bulbM2);
+    b.position.set(Math.cos(a) * 0.85, -1.05, Math.sin(a) * 0.85); chand.add(b); }
+  const hub = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), bulbM2); hub.position.y = -1.15; chand.add(hub);
+  chand.position.set(0, H, -0.2); g.add(chand);
+  const chLight = new THREE.PointLight(0xffd9a3, 0.85, 16, 2); chLight.position.set(0, 3.6, -0.2); g.add(chLight);
+  const recLight = new THREE.PointLight(0xffe2b0, 0.4, 7, 2); recLight.position.set(0, 2.6, -3.2); g.add(recLight);
+  const rug = smesh(new THREE.BoxGeometry(5.6, 0.025, 3.6), smat([0.48, 0.14, 0.16], 1), 0, 0.013, 0.6); rug.castShadow = false; g.add(rug);
+  const rugIn = smesh(new THREE.BoxGeometry(5.0, 0.028, 3.0), smat([0.58, 0.22, 0.20], 1), 0, 0.014, 0.6); rugIn.castShadow = false; g.add(rugIn);
+  function sofa(color, x, z, ry) {
+    const s = new THREE.Group();
+    const m = smat(color, 1);
+    const c2 = smat([color[0] + 0.06, color[1] + 0.05, color[2] + 0.05], 1);
+    s.add(smesh(new THREE.BoxGeometry(1.95, 0.4, 0.85), m, 0, 0.28, 0));
+    s.add(smesh(new THREE.BoxGeometry(1.95, 0.58, 0.22), m, 0, 0.66, -0.32));
+    [-0.86, 0.86].forEach(ax => s.add(smesh(new THREE.BoxGeometry(0.22, 0.3, 0.85), m, ax, 0.56, 0)));
+    [-0.44, 0.44].forEach(ax => s.add(smesh(new THREE.BoxGeometry(0.82, 0.13, 0.72), c2, ax, 0.52, 0.02)));
+    s.position.set(x, 0, z); s.rotation.y = ry; return s;
+  }
+  g.add(sofa([0.42, 0.14, 0.16], -0.2, 2.3, Math.PI));
+  g.add(sofa([0.42, 0.14, 0.16], -0.2, -1.2, 0));
+  g.add(smesh(new THREE.CylinderGeometry(0.55, 0.55, 0.05, 22), smat([0.12, 0.12, 0.13], 0.12, 0.3), -0.2, 0.42, 0.55));
+  g.add(smesh(new THREE.CylinderGeometry(0.05, 0.08, 0.4, 10), goldM, -0.2, 0.2, 0.55));
+  [[-7.2, 4.6], [7.2, 4.6], [-7.2, -4.6], [7.2, -4.6]].forEach(p => {
+    g.add(smesh(new THREE.CylinderGeometry(0.30, 0.22, 0.5, 14), goldM, p[0], 0.25, p[1]));
+    g.add(smesh(new THREE.IcosahedronGeometry(0.52, 1), smat([0.20, 0.40, 0.20], 1), p[0], 0.95, p[1]));
+    g.add(smesh(new THREE.IcosahedronGeometry(0.36, 1), smat([0.24, 0.46, 0.22], 1), p[0] + 0.2, 1.25, p[1] - 0.1));
+  });
+  const sc1 = smesh(new THREE.BoxGeometry(0.52, 0.72, 0.22), smat([0.13, 0.35, 0.42], 0.5), 3.6, 0.36, -3.4); sc1.rotation.y = 0.4; g.add(sc1);
+  const sc2 = smesh(new THREE.BoxGeometry(0.46, 0.62, 0.2), smat([0.80, 0.58, 0.16], 0.5), 4.25, 0.31, -3.2); sc2.rotation.y = -0.25; g.add(sc2);
+  return g;
+}
+const SCENES = {
+  field:   { ground: 'grass', groundVisible: true, fog: [16, 55], cam: [2.7, 1.8, 4.5], tgt: [0, 0.9, 0], anchors: [[-1.08, 0, 0], [0, 0, 0], [1.08, 0, 0]] },
+  city:    { build: buildCity, ground: 'concrete', groundVisible: true, fog: [22, 130], cam: [15.5, 3.2, 6.2], tgt: [-1.5, 1.3, 3.6], anchors: [[-1.05, 0.12, 4.05], [0, 0.12, 4.05], [1.05, 0.12, 4.05]] },
+  indoor:  { build: buildIndoor, groundVisible: false, fog: [26, 120], cam: [3.7, 2.1, 5.1], tgt: [-0.4, 1.0, -0.9], anchors: [[-1.15, 0, 0.95], [-0.1, 0, 0.75], [0.95, 0, 0.5]] },
+  country: { build: buildCountry, ground: 'grass', groundVisible: true, fog: [26, 230], cam: [7.0, 3.1, 11.0], tgt: [0, 1.1, -1.0], anchors: [[-1.05, 0, 3.3], [0, 0, 3.15], [1.05, 0, 2.95]] },
+  hotel:   { build: buildHotel, groundVisible: false, fog: [26, 120], cam: [4.8, 2.5, 6.2], tgt: [0, 1.3, -2.0], anchors: [[-1.25, 0, -2.05], [0, 0, -1.95], [1.3, 0, -1.8]] }
+};
+let sceneName = 'field', sceneGroup = null;
+function clearSceneGroup() {
+  if (!sceneGroup) return;
+  sceneGroup.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => {
+      ['map', 'bumpMap', 'roughnessMap', 'emissiveMap'].forEach(k => { if (m[k]) m[k].dispose(); });
+      m.dispose();
+    });
+  });
+  scene.remove(sceneGroup); sceneGroup = null;
+}
+function setScene(name) {
+  const def = SCENES[name]; if (!def) return;
+  sceneName = name;
+  clearSceneGroup();
+  if (def.build) { sceneGroup = def.build(); scene.add(sceneGroup); }
+  ground.visible = def.groundVisible !== false;
+  if (def.ground) applyGround(def.ground);
+  scene.fog.near = def.fog[0]; scene.fog.far = def.fog[1];
+  controls.target.set(def.tgt[0], def.tgt[1], def.tgt[2]);
+  camera.position.set(def.cam[0], def.cam[1], def.cam[2]);
+  ['m', 'life', 'f'].forEach((r, i) => { const m = models.find(x => x.role === r); const a = def.anchors[i]; if (m && a) m.group.position.set(a[0], a[1], a[2]); });
+  $('sceneSel').value = name;
+}
+
 /* ---------------- UI 配線 ---------------- */
 $('uiToggle').onclick = () => {
   const p = $('panel'); const open = p.classList.toggle('open');
-  $('uiToggle').textContent = open ? '🎛 Studio v1.1｜設定を隠す' : '🎛 Studio v1.1｜設定を表示';
+  $('uiToggle').textContent = open ? '🎛 Studio v1.3｜設定を隠す' : '🎛 Studio v1.3｜設定を表示';
 };
 $('envSel').onchange = e => applyEnv(e.target.value);
 $('expo').oninput = e => { $('expoVal').textContent = Number(e.target.value).toFixed(2);
   postUniforms.uExposure.value = ENVS[envName].exposure * Number(e.target.value); };
 $('groundSel').onchange = e => applyGround(e.target.value);
+$('sceneSel').onchange = e => setScene(e.target.value);
 $('rotChk').onchange = e => { controls.autoRotate = e.target.checked; };
 $('contactChk').onchange = e => { models.forEach(m => m.contact.visible = e.target.checked); };
 $('shadowChk').onchange = e => { renderer.shadowMap.enabled = e.target.checked;
@@ -5245,6 +5941,8 @@ addEventListener('keydown', e => {
   const tag = (e.target && e.target.tagName) || '';
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
   const names = ['day', 'sunset', 'night', 'cloudy', 'studio'];
+  const sceneKeys = { '6': 'field', '7': 'city', '8': 'indoor', '9': 'country', '0': 'hotel' };
+  if (sceneKeys[e.key]) { setScene(sceneKeys[e.key]); return; }
   if (e.key >= '1' && e.key <= '5') applyEnv(names[Number(e.key) - 1]);
   else if (e.key === 'r' || e.key === 'R') { const c = $('rotChk'); c.checked = !c.checked; controls.autoRotate = c.checked; }
   else if (e.key === 'h' || e.key === 'H') $('uiToggle').click();
@@ -5267,6 +5965,7 @@ function animate() {
   skyUniforms.uTime.value = clock.elapsedTime;
   postUniforms.uTime.value = clock.elapsedTime;
   models.forEach(m => { if (m.mixer) m.mixer.update(dt); });
+  updateLifeModel(dt);
   if (boxHelper && selected) boxHelper.update();
   controls.update();
   renderFrame();
@@ -5274,8 +5973,18 @@ function animate() {
 animate();
 
 /* 検証・連携用の公開ハンドル */
-window.Studio = { scene, camera, renderer, controls, applyEnv, applyGround, models,
-  version: '1.1', get env() { return envName; } };
+window.Studio = { scene, camera, renderer, controls, applyEnv, applyGround, setScene, models,
+  version: '1.3', get env() { return envName; }, get sceneName() { return sceneName; },
+  get lifeModel() { return lifeModel; },
+  life: { play: lifePlayShot, toggleLoop: lifeToggleLoop, togglePose: lifeTogglePose,
+    toggleClipLoop: lifeToggleClipLoop, gesture: lifePlayGesture, stop: lifeStopAll,
+    state: () => ({ shot: LIFE_STATE.shot, loop: LIFE_STATE.loop, hold: LIFE_STATE.hold,
+      clipLoop: LIFE_STATE.clipLoop, gesture: LIFE_STATE.gesture, clip: LIFE_CUR.clip,
+      ballMode: LIFE_BALL.mode,
+      ballPos: lifeModel && lifeModel.lifeProps ? [+lifeModel.lifeProps.ball.position.x.toFixed(2), +lifeModel.lifeProps.ball.position.y.toFixed(2), +lifeModel.lifeProps.ball.position.z.toFixed(2)] : null,
+      batVis: lifeModel && lifeModel.lifeProps ? lifeModel.lifeProps.bat.visible : null,
+      chairVis: lifeModel && lifeModel.lifeProps ? lifeModel.lifeProps.chair.visible : null,
+      matVis: lifeModel && lifeModel.lifeProps ? lifeModel.lifeProps.mat.visible : null }) } };
 </script>
 </body>
 </html>
