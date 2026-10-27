@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>3Dフィールド Studio v1.4 — リアルな風景と生活動作モデル</title>
+<title>3Dフィールド Studio v1.6 — 実写質感とリアルな風景</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:100%; height:100%; overflow:hidden; background:#0b0f14; font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif; }
@@ -59,10 +59,10 @@
 </head>
 <body>
 <div id="app"></div>
-<button id="uiToggle">🎛 Studio v1.4｜設定を表示</button>
+<button id="uiToggle">🎛 Studio v1.6｜設定を表示</button>
 <div id="panel">
   <h1>3Dフィールド Studio</h1>
-  <div class="ver">v1.4 — リアルな風景（質感テクスチャ・小物・植生・遠景）＋シーン切替＋生活動作モデル（全64種）＋PBR＋映画風ポストプロセス</div>
+  <div class="ver">v1.6 — 実写テクスチャ＋葉カードの樹木・建物の凹凸・車両の作り込み＋シーン切替＋生活動作モデル（全64種）＋PBR＋映画風ポストプロセス</div>
   <h2>シーン</h2>
   <label>場所
     <select id="sceneSel">
@@ -4803,7 +4803,7 @@ const SAMPLE_M_URL='human-m.b64';
 const SAMPLE_F_URL='human-f.b64';
 const SAMPLE_LIFE_URL='life-model.b64';
 'use strict';
-/* 3Dフィールド Studio v1.4 — three.js PBR + 環境光（PMREM）の展示フィールド
+/* 3Dフィールド Studio v1.6 — three.js PBR + 環境光（PMREM）の展示フィールド
    v1.2: シーン切替（街並み・屋内・田舎・ホテル）
    v1.3: 生活動作スタジオのモデル（骨格・指・全64動作・小道具）を組み込み */
 const $ = id => document.getElementById(id);
@@ -4844,7 +4844,7 @@ function makeDetailTexture(style) {
 
 /* ---------------- 環境プリセット ---------------- */
 const ENVS = {
-  day:    { zen:[.10,.24,.55], hor:[.74,.82,.92], gnd:[.30,.28,.24], sunTint:[.13,.115,.095], sunDir:[-.35,.8,.5],  sunCol:[1.25,1.18,1.05], fog:[.50,.60,.74], exposure:1.0,  cloud:.45, sunI:2.3, hemiI:.50, star:0 },
+  day:    { zen:[.10,.24,.55], hor:[.74,.82,.92], gnd:[.30,.28,.24], sunTint:[.13,.115,.095], sunDir:[-.35,.8,.5],  sunCol:[1.25,1.18,1.05], fog:[.50,.60,.74], exposure:1.0,  cloud:.45, sunI:2.55, hemiI:.44, star:0 },
   sunset: { zen:[.15,.19,.42], hor:[.98,.55,.30], gnd:[.25,.20,.18], sunTint:[.17,.075,.02],  sunDir:[-.78,.26,.38], sunCol:[1.35,.72,.40],  fog:[.60,.42,.33], exposure:1.03, cloud:.35, sunI:2.0, hemiI:.45, star:.12 },
   night:  { zen:[.012,.028,.075], hor:[.10,.14,.22], gnd:[.03,.03,.045], sunTint:[.05,.062,.095], sunDir:[.30,.62,-.42], sunCol:[.34,.42,.60], fog:[.05,.07,.11], exposure:1.06, cloud:.15, sunI:.6, hemiI:.22, star:1 },
   cloudy: { zen:[.30,.34,.40], hor:[.60,.63,.66], gnd:[.26,.26,.25], sunTint:[.05,.05,.045], sunDir:[-.30,.75,.45], sunCol:[.60,.63,.66],  fog:[.52,.55,.58], exposure:1.0,  cloud:.85, sunI:1.0, hemiI:.65, star:0 },
@@ -5012,7 +5012,44 @@ const groundMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0
 const ground = new THREE.Mesh(new THREE.CircleGeometry(34, 48), groundMat);
 ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
 scene.add(ground);
+const macroCv = document.createElement('canvas'); macroCv.width = macroCv.height = 512;
+{ const mx = macroCv.getContext('2d'); mx.fillStyle = '#ffffff'; mx.fillRect(0, 0, 512, 512);
+  let mseed = 818; const mrnd = () => { mseed = (mseed * 16807) % 2147483647; return mseed / 2147483647; };
+  for (let i = 0; i < 30; i++) { const bx = mrnd() * 512, by = mrnd() * 512, br = 50 + mrnd() * 130;
+    const gr = mx.createRadialGradient(bx, by, 0, bx, by, br);
+    const dark = (0.70 + mrnd() * 0.30) * 255 | 0;
+    gr.addColorStop(0, 'rgba(' + dark + ',' + dark + ',' + dark + ',0.6)');
+    gr.addColorStop(1, 'rgba(255,255,255,0)');
+    mx.fillStyle = gr; mx.beginPath(); mx.arc(bx, by, br, 0, 7); mx.fill(); } }
+const macroTex = new THREE.CanvasTexture(macroCv);
+macroTex.wrapS = macroTex.wrapT = THREE.RepeatWrapping; macroTex.repeat.set(3, 3);
+macroTex.center.set(0.5, 0.5); macroTex.rotation = 0.7;
+const groundMacro = new THREE.Mesh(new THREE.CircleGeometry(34, 48),
+  new THREE.MeshBasicMaterial({ map: macroTex, blending: THREE.MultiplyBlending, depthWrite: false }));
+groundMacro.rotation.x = -Math.PI / 2; groundMacro.position.y = 0.002; groundMacro.renderOrder = 1;
+scene.add(groundMacro);
 function applyGround(style) {
+  if (style === 'grass' || style === 'concrete') {
+    const set = ptexSet(style, style === 'grass' ? 26 : 40, style === 'grass' ? 26 : 40);
+    if (set) {
+      if (groundMat.map) groundMat.map.dispose();
+      if (groundMat.bumpMap) groundMat.bumpMap.dispose();
+      if (groundMat.roughnessMap) groundMat.roughnessMap.dispose();
+      if (groundMat.normalMap) groundMat.normalMap.dispose();
+      groundMat.map = set.map;
+      groundMat.normalMap = set.normalMap || null;
+      if (groundMat.normalMap) groundMat.normalScale = new THREE.Vector2(0.5, 0.5);
+      groundMat.bumpMap = style === 'grass' ? set.map : null;
+      groundMat.bumpScale = 0.05;
+      groundMat.roughnessMap = set.roughnessMap || null;
+      if (style === 'grass') groundMat.color.setRGB(s2l(0.88), s2l(1.0), s2l(0.84));
+      else groundMat.color.setRGB(s2l(0.92), s2l(0.92), s2l(0.93));
+      groundMat.roughness = 1;
+      groundMat.needsUpdate = true;
+      $('groundSel').value = style;
+      return;
+    }
+  }
   const tex = new THREE.CanvasTexture(makeGroundCanvas(style));
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(10, 10);
   tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 8;
@@ -5029,6 +5066,66 @@ function applyGround(style) {
   groundMat.needsUpdate = true;
   $('groundSel').value = style;
 }
+
+/* ---------------- 実写テクスチャ（Poly Haven CC0・写真素材） ----------------
+   読込が終わるまでは従来の手続きテクスチャで描き、揃ったら実写へ差し替える */
+const PHOTO_DEFS = {
+  grass: ['diff', 'rough'], asphalt: ['diff', 'nor', 'rough'], concrete: ['diff', 'nor'],
+  wood: ['diff', 'nor', 'rough'], marble: ['diff', 'rough'], dirt: ['diff', 'nor'], plaster: ['diff']
+};
+const PHOTO = {};
+let photoPending = 0, photoSettled = false;
+function initPhotoTextures() {
+  const kinds = { diff: 'map', nor: 'normalMap', rough: 'roughnessMap' };
+  const embedded = (typeof TEX_EMBED !== 'undefined') ? TEX_EMBED : null;
+  Object.keys(PHOTO_DEFS).forEach(key => {
+    PHOTO[key] = {};
+    PHOTO_DEFS[key].forEach(kind => {
+      photoPending++;
+      const finish = () => { if (--photoPending <= 0) settlePhoto(); };
+      const load = src => {
+        const img = new Image();
+        img.onload = () => {
+          const t = new THREE.Texture(img);
+          t.wrapS = t.wrapT = THREE.RepeatWrapping;
+          if (kind === 'diff') t.encoding = THREE.sRGBEncoding;
+          t.anisotropy = 8;
+          PHOTO[key][kinds[kind]] = t;
+          finish();
+        };
+        img.onerror = finish;
+        img.src = src;
+      };
+      const name = key + '_' + kind;
+      if (embedded && embedded[name]) load(embedded[name]);
+      else fetch('tex/' + name + '.b64')
+        .then(r => r.ok ? r.text() : Promise.reject(new Error('nf')))
+        .then(t => load('data:image/jpeg;base64,' + t.trim()))
+        .catch(finish);
+    });
+  });
+}
+function settlePhoto() {
+  if (photoSettled) return; photoSettled = true;
+  applyGround($('groundSel').value);
+  setScene(sceneName);
+}
+function ptexSet(key, rx, ry) {
+  const set = PHOTO[key]; if (!set || !set.map) return null;
+  const out = {};
+  for (const k in set) { const c = set[k].clone(); c.repeat.set(rx, ry); c.needsUpdate = true; out[k] = c; }
+  return out;
+}
+function photoStd(key, rx, ry, rough, fallback) {
+  const set = ptexSet(key, rx, ry);
+  if (!set) return fallback;
+  const m = new THREE.MeshStandardMaterial({ roughness: rough });
+  m.map = set.map;
+  if (set.normalMap) { m.normalMap = set.normalMap; m.normalScale = new THREE.Vector2(0.6, 0.6); }
+  if (set.roughnessMap) m.roughnessMap = set.roughnessMap;
+  return m;
+}
+initPhotoTextures();
 
 /* ---------------- ポストプロセス ----------------
    シーンを一度レンダーターゲット（HDR・1.5倍解像度）へ描き、最終パスで
@@ -5536,10 +5633,32 @@ function facadeTexture(base, win) {
   x.fillStyle = 'rgba(120,52,40,0.95)'; x.fillRect(0, 442, 256, 12);
   const t = new THREE.CanvasTexture(cv);
   t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+  return { map: t, nrm: normalFromCanvas(cv, 2.4) };
+}
+function normalFromCanvas(cv, strength) {
+  const w = cv.width, h = cv.height;
+  const src = cv.getContext('2d').getImageData(0, 0, w, h).data;
+  const out = document.createElement('canvas'); out.width = w; out.height = h;
+  const octx = out.getContext('2d'); const img = octx.createImageData(w, h); const d = img.data;
+  const lum = (x, y) => { x = (x + w) % w; y = Math.min(h - 1, Math.max(0, y));
+    const i = (y * w + x) * 4; return (src[i] * 0.3 + src[i + 1] * 0.5 + src[i + 2] * 0.2) / 255; };
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const dx = (lum(x - 1, y) - lum(x + 1, y)) * strength;
+    const dy = (lum(x, y - 1) - lum(x, y + 1)) * strength;
+    const inv = 1 / Math.hypot(dx, dy, 1);
+    const i = (y * w + x) * 4;
+    d[i] = (dx * inv * 0.5 + 0.5) * 255; d[i + 1] = (dy * inv * 0.5 + 0.5) * 255;
+    d[i + 2] = inv * 255; d[i + 3] = 255;
+  }
+  octx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(out);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
 }
 function building(w, h, d, tint, base) {
-  const side = new THREE.MeshStandardMaterial({ map: facadeTexture(base, '#2c3844'), roughness: 0.92 });
+  const ft = facadeTexture(base, '#2c3844');
+  const side = new THREE.MeshStandardMaterial({ map: ft.map, normalMap: ft.nrm, roughness: 0.92 });
+  side.normalScale = new THREE.Vector2(0.85, 0.85);
   side.color.setRGB(s2l(tint[0]), s2l(tint[1]), s2l(tint[2]));
   const roof = smat([0.23, 0.24, 0.26], 0.95);
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [side, side, roof, roof, side, side]);
@@ -5608,6 +5727,57 @@ function signTexture(text, bg, fg, fontPx) {
   const t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
   return t;
 }
+function blobGeo(r, seed) {
+  const geo = new THREE.SphereGeometry(r, 7, 6);
+  const pos = geo.attributes.position; const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const h = Math.sin(v.x * 12.9898 + v.y * 78.233 + v.z * 37.719 + seed) * 43758.5453;
+    const n = (h - Math.floor(h) - 0.5) * 0.38;
+    v.multiplyScalar(1 + n); pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+function leafClusterTexture() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+  const x = cv.getContext('2d');
+  let seed = 4711; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  x.clearRect(0, 0, 256, 256);
+  for (let i = 0; i < 165; i++) {
+    const a = rnd() * Math.PI * 2, rr = Math.pow(rnd(), 0.6) * 112;
+    const lx = 128 + Math.cos(a) * rr, ly = 128 + Math.sin(a) * rr;
+    const len = 17 + rnd() * 16, wid = len * 0.44, rot = rnd() * Math.PI;
+    const hue = 86 + rnd() * 28, li = 22 + rnd() * 21;
+    x.save(); x.translate(lx, ly); x.rotate(rot);
+    x.fillStyle = 'hsl(' + hue + ', 44%, ' + li + '%)';
+    x.beginPath(); x.ellipse(0, 0, len / 2, wid / 2, 0, 0, 7); x.fill();
+    x.strokeStyle = 'hsla(' + hue + ', 46%, ' + Math.max(10, li - 9) + '%, 0.85)'; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(-len / 2, 0); x.lineTo(len / 2, 0); x.stroke();
+    x.restore();
+  }
+  const t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4;
+  return t;
+}
+const leafTexShared = leafClusterTexture();
+const leafMats = [[1, 1, 1], [0.82, 0.98, 0.78], [1.02, 1.0, 0.86]].map(tint => {
+  const m = new THREE.MeshStandardMaterial({ map: leafTexShared, alphaTest: 0.42, side: THREE.DoubleSide, roughness: 1 });
+  m.color.setRGB(s2l(tint[0]), s2l(tint[1]), s2l(tint[2]));
+  return m;
+});
+const leafGeoUnit = new THREE.PlaneGeometry(1, 1);
+function leafCards(parent, cx, cy, cz, r, seed, count) {
+  let s = seed; const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+  for (let k = 0; k < count; k++) {
+    const p = new THREE.Mesh(leafGeoUnit, leafMats[(seed + k) % 3]);
+    const sc = r * (2.05 + rnd() * 0.6);
+    p.scale.set(sc, sc, sc);
+    p.position.set(cx + (rnd() - .5) * .42 * r, cy + (rnd() - .5) * .42 * r, cz + (rnd() - .5) * .42 * r);
+    p.rotation.set(rnd() * 3.1, rnd() * 3.1, rnd() * 3.1);
+    p.castShadow = true; p.receiveShadow = false;
+    parent.add(p);
+  }
+}
 function aoGround(w, d, x, z, y, op) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
     new THREE.MeshBasicMaterial({ map: contactTex, transparent: true, opacity: op, depthWrite: false }));
@@ -5664,15 +5834,16 @@ function treeD(x, z, s, pine) {
     const blobs = [[0, 2.0, 0, 1.18], [0.55, 1.6, 0.28, 0.82], [-0.52, 1.66, -0.22, 0.78], [0.1, 2.5, -0.3, 0.72], [-0.2, 2.42, 0.32, 0.66]];
     blobs.forEach(b => {
       const m = smat(greens[gi % 4], 1); gi++;
-      t.add(smesh(new THREE.IcosahedronGeometry(b[3] * s, 1), m, b[0] * s, b[1] * s, b[2] * s));
+      t.add(smesh(blobGeo(b[3] * s * 0.85, 900 + gi * 37), m, b[0] * s, b[1] * s, b[2] * s));
     });
+    blobs.forEach((b, bi) => leafCards(t, b[0] * s, b[1] * s, b[2] * s, b[3] * s, 500 + bi * 7 + ((x * 13 + z * 29) | 0), 3));
   }
   t.position.set(x, 0, z);
   return t;
 }
 function buildField() {
   const g = new THREE.Group();
-  grassTufts(g, 0, 0, 24, 55, 1234, (x, z) => (x * x + z * z) > 5.5);
+  grassTufts(g, 0, 0, 24, 80, 1234, (x, z) => (x * x + z * z) > 5.5);
   [[-13, -9, 1.25, false], [15, -7, 1.1, true], [-17, 4, 1.0, false], [11, 10, 1.2, false], [19, 2, 0.95, true]].forEach(p => g.add(treeD(p[0], p[1], p[2], p[3])));
   let rseed = 777; const rrnd = () => { rseed = (rseed * 16807) % 2147483647; return rseed / 2147483647; };
   const rockM = smat([0.48, 0.48, 0.47], 1);
@@ -5683,12 +5854,12 @@ function buildField() {
 }
 function buildCity() {
   const g = new THREE.Group();
-  const road = smesh(new THREE.PlaneGeometry(64, 6.4), new THREE.MeshStandardMaterial({ map: asphaltTexture(), roughness: 0.97 }), 0, 0.01, 0);
+  const road = smesh(new THREE.PlaneGeometry(64, 6.4), photoStd('asphalt', 10, 1, 0.97, new THREE.MeshStandardMaterial({ map: asphaltTexture(), roughness: 0.97 })), 0, 0.01, 0);
   road.rotation.x = -Math.PI / 2; road.castShadow = false; g.add(road);
   const lineM = smat([0.85, 0.85, 0.82], 0.8);
   for (let x = -30; x <= 30; x += 4) { if (Math.abs(x) < 3.6) continue;
     const dash = smesh(new THREE.BoxGeometry(1.7, 0.012, 0.22), lineM, x, 0.016, 0); dash.castShadow = false; g.add(dash); }
-  const walkM = new THREE.MeshStandardMaterial({ map: sidewalkTexture(), roughness: 0.95 });
+  const walkM = photoStd('concrete', 28, 2, 0.95, new THREE.MeshStandardMaterial({ map: sidewalkTexture(), roughness: 0.95 }));
   [-4.05, 4.05].forEach(z => { const w = smesh(new THREE.BoxGeometry(64, 0.12, 1.7), walkM, 0, 0.06, z); w.castShadow = false; g.add(w); });
   for (let i = 0; i < 5; i++) { const s = smesh(new THREE.BoxGeometry(0.55, 0.012, 5.6), lineM, -1.4 + i * 0.7, 0.016, 0); s.castShadow = false; g.add(s); }
   const specs = [
@@ -5728,13 +5899,27 @@ function buildCity() {
   }
   function car(color, x, z, ry) {
     const c = new THREE.Group();
-    const body = smat(color, 0.35, 0.5);
-    c.add(smesh(new THREE.BoxGeometry(1.7, 0.42, 0.78), body, 0, 0.42, 0));
-    c.add(smesh(new THREE.BoxGeometry(0.92, 0.36, 0.7), smat([0.10, 0.11, 0.13], 0.15, 0.4), -0.08, 0.79, 0));
-    const wm = smat([0.05, 0.05, 0.05], 0.9);
-    [[-0.55, -0.4], [0.55, -0.4], [-0.55, 0.4], [0.55, 0.4]].forEach(w => {
-      const wh = smesh(new THREE.CylinderGeometry(0.21, 0.21, 0.12, 14), wm, w[0], 0.21, w[1]);
-      wh.rotation.x = Math.PI / 2; c.add(wh); });
+    const body = new THREE.MeshStandardMaterial({ roughness: 0.32, metalness: 0.55 });
+    body.color.setRGB(s2l(color[0]), s2l(color[1]), s2l(color[2]));
+    c.add(smesh(new THREE.BoxGeometry(1.78, 0.40, 0.80), body, 0, 0.44, 0));
+    const glassM = new THREE.MeshStandardMaterial({ roughness: 0.08, metalness: 0.3, envMapIntensity: 1.4 });
+    glassM.color.setRGB(s2l(0.08), s2l(0.10), s2l(0.13));
+    c.add(smesh(new THREE.BoxGeometry(0.98, 0.34, 0.72), glassM, -0.06, 0.80, 0));
+    c.add(smesh(new THREE.BoxGeometry(0.86, 0.05, 0.68), body, -0.06, 0.99, 0));
+    const wm = smat([0.04, 0.04, 0.045], 0.85);
+    const hubM = smat([0.62, 0.63, 0.65], 0.35, 0.7);
+    [[-0.58, -0.41], [0.58, -0.41], [-0.58, 0.41], [0.58, 0.41]].forEach(w => {
+      const wh = smesh(new THREE.CylinderGeometry(0.215, 0.215, 0.13, 16), wm, w[0], 0.215, w[1]);
+      wh.rotation.x = Math.PI / 2; c.add(wh);
+      const hub = smesh(new THREE.CylinderGeometry(0.10, 0.10, 0.135, 12), hubM, w[0], 0.215, w[1]);
+      hub.rotation.x = Math.PI / 2; hub.castShadow = false; c.add(hub); });
+    const lightM = new THREE.MeshStandardMaterial({ roughness: 0.25 }); lightM.color.setRGB(1.6, 1.55, 1.3);
+    const tailM = new THREE.MeshStandardMaterial({ roughness: 0.25 }); tailM.color.setRGB(1.1, 0.16, 0.14);
+    [-0.24, 0.24].forEach(z2 => {
+      const hl = smesh(new THREE.BoxGeometry(0.03, 0.09, 0.20), lightM, 0.90, 0.52, z2); hl.castShadow = false; c.add(hl);
+      const tl2 = smesh(new THREE.BoxGeometry(0.03, 0.08, 0.20), tailM, -0.90, 0.54, z2); tl2.castShadow = false; c.add(tl2); });
+    const plate = smesh(new THREE.BoxGeometry(0.02, 0.11, 0.34), smat([0.92, 0.92, 0.90], 0.5), -0.905, 0.38, 0);
+    plate.castShadow = false; c.add(plate);
     c.position.set(x, 0.02, z); c.rotation.y = ry; return c;
   }
   g.add(car([0.62, 0.16, 0.14], -7.5, -1.6, 0));
@@ -5743,7 +5928,7 @@ function buildCity() {
   const bushM = smat([0.25, 0.45, 0.22], 1);
   [-3.6, 3.6, -8.5, 8.5].forEach(x => {
     g.add(smesh(new THREE.BoxGeometry(1.1, 0.42, 0.6), planterM, x, 0.33, 4.05));
-    g.add(smesh(new THREE.IcosahedronGeometry(0.42, 1), bushM, x, 0.78, 4.05));
+    g.add(smesh(blobGeo(0.42, 55 + x), bushM, x, 0.78, 4.05));
   });
   // マンホール
   const mhM = smat([0.10, 0.10, 0.105], 0.9);
@@ -5799,13 +5984,15 @@ function buildCity() {
 function buildIndoor() {
   const g = new THREE.Group();
   const W = 9, D = 7, H = 3.2;
-  const floorTex = new THREE.CanvasTexture(makeGroundCanvas('wood'));
-  floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(3, 2.4);
-  floorTex.encoding = THREE.sRGBEncoding; floorTex.anisotropy = 8;
-  const floorM = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.7 });
-  floorM.color.setRGB(s2l(0.62), s2l(0.47), s2l(0.32));
+  const floorM = photoStd('wood', 3, 2.4, 0.62, (() => {
+    const t = new THREE.CanvasTexture(makeGroundCanvas('wood'));
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 2.4); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+    const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.7 });
+    m.color.setRGB(s2l(0.62), s2l(0.47), s2l(0.32)); return m; })());
   const floor = smesh(new THREE.BoxGeometry(W, 0.1, D), floorM, 0, -0.05, 0); floor.castShadow = false; g.add(floor);
   const wallM = smat([0.92, 0.89, 0.84], 0.95);
+  const wallTexSet = ptexSet('plaster', 3, 2);
+  if (wallTexSet) { wallM.bumpMap = wallTexSet.map; wallM.bumpScale = 0.035; }
   const accentM = smat([0.72, 0.76, 0.70], 0.95);
   const bw = new THREE.Group();
   const seg = (w, h, x, y) => bw.add(smesh(new THREE.BoxGeometry(w, h, 0.15), accentM, x, y, 0));
@@ -5883,7 +6070,7 @@ function buildIndoor() {
   g.add(smesh(new THREE.CylinderGeometry(0.16, 0.12, 0.3, 12), smat([0.55, 0.30, 0.20], 0.8), 3.9, 0.15, 2.7));
   const leafM = smat([0.22, 0.42, 0.20], 1);
   [[0, 0.75, 0, 0.30], [0.14, 0.60, 0.08, 0.22], [-0.13, 0.62, -0.06, 0.24]].forEach(o =>
-    g.add(smesh(new THREE.IcosahedronGeometry(o[3], 1), leafM, 3.9 + o[0], o[1], 2.7 + o[2])));
+    g.add(smesh(blobGeo(o[3], 77 + o[0] * 10), leafM, 3.9 + o[0], o[1], 2.7 + o[2])));
 
   // 巾木（壁と床の境目）
   const baseM = smat([0.96, 0.95, 0.93], 0.8);
@@ -5939,9 +6126,9 @@ function roofPrism(w, h, d, capMat, sideMat) {
 }
 function buildCountry() {
   const g = new THREE.Group();
-  const path = smesh(new THREE.PlaneGeometry(3, 46), new THREE.MeshStandardMaterial({ map: dirtTexture(1, 12, false), roughness: 1 }), 0, 0.008, 0);
+  const path = smesh(new THREE.PlaneGeometry(3, 46), photoStd('dirt', 1, 12, 1, new THREE.MeshStandardMaterial({ map: dirtTexture(1, 12, false), roughness: 1 })), 0, 0.008, 0);
   path.rotation.x = -Math.PI / 2; path.castShadow = false; g.add(path);
-  const path2 = smesh(new THREE.PlaneGeometry(9, 2.2), new THREE.MeshStandardMaterial({ map: dirtTexture(6, 1, true), roughness: 1 }), -4.6, 0.009, -6);
+  const path2 = smesh(new THREE.PlaneGeometry(9, 2.2), photoStd('dirt', 6, 1, 1, new THREE.MeshStandardMaterial({ map: dirtTexture(6, 1, true), roughness: 1 })), -4.6, 0.009, -6);
   path2.rotation.x = -Math.PI / 2; path2.castShadow = false; g.add(path2);
   const house = new THREE.Group();
   const wallHM = smat([0.94, 0.91, 0.84], 0.95);
@@ -5980,9 +6167,12 @@ function buildCountry() {
     t.add(smesh(new THREE.CylinderGeometry(0.13 * s, 0.18 * s, 1.3 * s, 7), smat([0.36, 0.25, 0.15], 1), 0, 0.65 * s, 0));
     const greens = [[0.24, 0.44, 0.20], [0.30, 0.50, 0.24], [0.20, 0.40, 0.19]];
     const gm = smat(greens[(Math.abs(x * 7 + z * 13) | 0) % 3], 1);
-    t.add(smesh(new THREE.IcosahedronGeometry(1.15 * s, 1), gm, 0, 1.95 * s, 0));
-    t.add(smesh(new THREE.IcosahedronGeometry(0.8 * s, 1), gm, 0.5 * s, 1.55 * s, 0.25 * s));
-    t.add(smesh(new THREE.IcosahedronGeometry(0.7 * s, 1), gm, -0.5 * s, 1.6 * s, -0.2 * s));
+    t.add(smesh(blobGeo(0.98 * s, 301), gm, 0, 1.95 * s, 0));
+    t.add(smesh(blobGeo(0.68 * s, 302), gm, 0.5 * s, 1.55 * s, 0.25 * s));
+    t.add(smesh(blobGeo(0.60 * s, 303), gm, -0.5 * s, 1.6 * s, -0.2 * s));
+    leafCards(t, 0, 1.95 * s, 0, 1.15 * s, 601 + ((x * 7 + z * 11) | 0), 4);
+    leafCards(t, 0.5 * s, 1.55 * s, 0.25 * s, 0.8 * s, 640, 3);
+    leafCards(t, -0.5 * s, 1.6 * s, -0.2 * s, 0.7 * s, 680, 3);
     t.position.set(x, 0, z); return t;
   }
   [[-15, -1, 1.2], [13, -3, 1.0], [-6, -15, 1.3], [17, -14, 1.1], [6, -19, 1.25], [-19, -11, 1.0],
@@ -6031,6 +6221,7 @@ function buildCountry() {
   // 池（反射する水面）＋石と葦
   const pondM = new THREE.MeshStandardMaterial({ roughness: 0.06, metalness: 0.05 });
   pondM.color.setRGB(s2l(0.36), s2l(0.55), s2l(0.62));
+  pondM.envMapIntensity = 1.6;
   const pond = smesh(new THREE.CircleGeometry(2.9, 26), pondM, -16.5, 0.015, 6.0);
   pond.rotation.x = -Math.PI / 2; pond.castShadow = false; g.add(pond);
   const stoneM = smat([0.50, 0.50, 0.49], 1);
@@ -6059,7 +6250,7 @@ function buildCountry() {
     });
   }
   // 草むら・松・接地AO
-  grassTufts(g, 0, 0, 27, 60, 555, (x, z) => Math.abs(x) > 2.1 && !(x > 4.4 && x < 18.6 && z > 1.4 && z < 11.6) && ((x + 16.5) * (x + 16.5) + (z - 6) * (z - 6) > 11));
+  grassTufts(g, 0, 0, 27, 90, 555, (x, z) => Math.abs(x) > 2.1 && !(x > 4.4 && x < 18.6 && z > 1.4 && z < 11.6) && ((x + 16.5) * (x + 16.5) + (z - 6) * (z - 6) > 11));
   g.add(treeD(-20, -17, 1.3, true)); g.add(treeD(23, -13, 1.15, true)); g.add(treeD(-24, 12, 1.05, true));
   g.add(aoGround(7.4, 6.2, -9.5, -6, 0.006, 0.28));
   g.add(aoGround(6.0, 5.2, 9.5, -9, 0.006, 0.28));
@@ -6098,8 +6289,9 @@ function marbleTexture() {
 function buildHotel() {
   const g = new THREE.Group();
   const W = 16, D = 11, H = 5;
-  const floorM = new THREE.MeshStandardMaterial({ map: marbleTexture(), roughness: 0.16, metalness: 0.05 });
-  floorM.color.setRGB(s2l(0.98), s2l(0.96), s2l(0.92));
+  const floorM = photoStd('marble', 4, 3, 0.22, (() => {
+    const m = new THREE.MeshStandardMaterial({ map: marbleTexture(), roughness: 0.16, metalness: 0.05 });
+    m.color.setRGB(s2l(0.98), s2l(0.96), s2l(0.92)); return m; })());
   const floor = smesh(new THREE.BoxGeometry(W, 0.1, D), floorM, 0, -0.05, 0); floor.castShadow = false; g.add(floor);
   const wallM = smat([0.88, 0.82, 0.72], 0.92);
   g.add(smesh(new THREE.BoxGeometry(W, H, 0.18), wallM, 0, H / 2, -D / 2));
@@ -6117,7 +6309,7 @@ function buildHotel() {
   const sconceM = new THREE.MeshStandardMaterial({ roughness: 0.5, emissive: 0xffc37a, emissiveIntensity: 1.1 });
   sconceM.color.setRGB(s2l(0.50), s2l(0.40), s2l(0.25));
   [-4.6, 4.6].forEach(x => { const s = smesh(new THREE.BoxGeometry(0.16, 0.34, 0.1), sconceM, x, 2.5, -D / 2 + 0.14); s.castShadow = false; g.add(s); });
-  const colM = new THREE.MeshStandardMaterial({ map: marbleTexture(), roughness: 0.3 });
+  const colM = photoStd('marble', 1, 2, 0.3, new THREE.MeshStandardMaterial({ map: marbleTexture(), roughness: 0.3 }));
   colM.color.setRGB(s2l(0.99), s2l(0.97), s2l(0.94));
   [[-5.6, -2.2], [5.6, -2.2], [-5.6, 2.6], [5.6, 2.6]].forEach(p => {
     g.add(smesh(new THREE.CylinderGeometry(0.34, 0.38, H, 18), colM, p[0], H / 2, p[1]));
@@ -6220,6 +6412,7 @@ function setScene(name) {
   clearSceneGroup();
   if (def.build) { sceneGroup = def.build(); scene.add(sceneGroup); }
   ground.visible = def.groundVisible !== false;
+  groundMacro.visible = ground.visible;
   if (def.ground) applyGround(def.ground);
   scene.fog.near = def.fog[0]; scene.fog.far = def.fog[1];
   controls.target.set(def.tgt[0], def.tgt[1], def.tgt[2]);
@@ -6231,7 +6424,7 @@ function setScene(name) {
 /* ---------------- UI 配線 ---------------- */
 $('uiToggle').onclick = () => {
   const p = $('panel'); const open = p.classList.toggle('open');
-  $('uiToggle').textContent = open ? '🎛 Studio v1.4｜設定を隠す' : '🎛 Studio v1.4｜設定を表示';
+  $('uiToggle').textContent = open ? '🎛 Studio v1.6｜設定を隠す' : '🎛 Studio v1.6｜設定を表示';
 };
 $('envSel').onchange = e => applyEnv(e.target.value);
 $('expo').oninput = e => { $('expoVal').textContent = Number(e.target.value).toFixed(2);
@@ -6322,7 +6515,7 @@ animate();
 
 /* 検証・連携用の公開ハンドル */
 window.Studio = { scene, camera, renderer, controls, applyEnv, applyGround, setScene, models,
-  version: '1.4', get env() { return envName; }, get sceneName() { return sceneName; },
+  version: '1.6', get env() { return envName; }, get sceneName() { return sceneName; },
   get lifeModel() { return lifeModel; },
   life: { play: lifePlayShot, toggleLoop: lifeToggleLoop, togglePose: lifeTogglePose,
     toggleClipLoop: lifeToggleClipLoop, gesture: lifePlayGesture, stop: lifeStopAll,
