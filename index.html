@@ -62,7 +62,7 @@
 <button id="uiToggle">🎛 Studio v1.8｜設定を表示</button>
 <div id="panel">
   <h1>3Dフィールド Studio</h1>
-  <div class="ver">v1.6 — 実写テクスチャ＋葉カードの樹木・建物の凹凸・車両の作り込み＋シーン切替＋生活動作モデル（全64種）＋PBR＋映画風ポストプロセス</div>
+  <div class="ver">v1.8 — 全9シーン（神社・駅・海辺・和室）＋実写テクスチャ＋葉カードの樹木＋流れる雲・走る車・波の動き＋生活動作モデル（全64種）＋PBR＋映画風ポストプロセス</div>
   <h2>シーン</h2>
   <label>場所
     <select id="sceneSel">
@@ -6848,7 +6848,7 @@ function setScene(name) {
 /* ---------------- UI 配線 ---------------- */
 $('uiToggle').onclick = () => {
   const p = $('panel'); const open = p.classList.toggle('open');
-  $('uiToggle').textContent = open ? '🎛 Studio v1.6｜設定を隠す' : '🎛 Studio v1.6｜設定を表示';
+  $('uiToggle').textContent = open ? '🎛 Studio v1.8｜設定を隠す' : '🎛 Studio v1.8｜設定を表示';
 };
 $('envSel').onchange = e => applyEnv(e.target.value);
 $('expo').oninput = e => { $('expoVal').textContent = Number(e.target.value).toFixed(2);
