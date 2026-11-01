@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>3Dフィールド Studio v1.7 — 新しい場所（神社・駅・海辺・和室）</title>
+<title>3Dフィールド Studio v1.8 — 動きと質感の底上げ</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:100%; height:100%; overflow:hidden; background:#0b0f14; font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif; }
@@ -59,7 +59,7 @@
 </head>
 <body>
 <div id="app"></div>
-<button id="uiToggle">🎛 Studio v1.7｜設定を表示</button>
+<button id="uiToggle">🎛 Studio v1.8｜設定を表示</button>
 <div id="panel">
   <h1>3Dフィールド Studio</h1>
   <div class="ver">v1.6 — 実写テクスチャ＋葉カードの樹木・建物の凹凸・車両の作り込み＋シーン切替＋生活動作モデル（全64種）＋PBR＋映画風ポストプロセス</div>
@@ -4807,7 +4807,7 @@ const SAMPLE_M_URL='human-m.b64';
 const SAMPLE_F_URL='human-f.b64';
 const SAMPLE_LIFE_URL='life-model.b64';
 'use strict';
-/* 3Dフィールド Studio v1.6 — three.js PBR + 環境光（PMREM）の展示フィールド
+/* 3Dフィールド Studio v1.8 — three.js PBR + 環境光（PMREM）の展示フィールド
    v1.2: シーン切替（街並み・屋内・田舎・ホテル）
    v1.3: 生活動作スタジオのモデル（骨格・指・全64動作・小道具）を組み込み */
 const $ = id => document.getElementById(id);
@@ -4905,7 +4905,7 @@ const skyMat = new THREE.ShaderMaterial({
       float sd = max(dot(d, L), 0.0);
       col += uSunTint * (pow(sd, 700.0) * 100.0 + pow(sd, 10.0) * 1.35);
       if (uCloud > 0.003 && d.y > 0.005) {
-        vec2 cuv = d.xz / (d.y + 0.15) * 1.35;
+        vec2 cuv = d.xz / (d.y + 0.15) * 1.35 + vec2(uTime * 0.006, uTime * 0.0023);
         float cn = vnoise(cuv * 1.7) * 0.62 + vnoise(cuv * 4.1) * 0.38;
         float cov = smoothstep(1.02 - uCloud * 0.9, 1.30 - uCloud * 0.9, cn) * smoothstep(0.005, 0.14, d.y);
         vec3 cc = mix(uHor, vec3(1.03), 0.38) + uSunTint * 2.4 * pow(sd, 3.0);
@@ -5100,7 +5100,7 @@ function initPhotoTextures() {
           const t = new THREE.Texture(img);
           t.wrapS = t.wrapT = THREE.RepeatWrapping;
           if (kind === 'diff') t.encoding = THREE.sRGBEncoding;
-          t.anisotropy = 8;
+          t.anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy());
           PHOTO[key][kinds[kind]] = t;
           finish();
         };
@@ -5600,6 +5600,7 @@ async function placeSamples() {
   } catch (err) { console.error(err); toast('サンプルの読み込みに失敗しました'); }
 }
 
+const animators = [];
 /* ---------------- シーン（街並み・屋内・田舎・ホテル） ----------------
    手続き生成の小道具で場所を作る。切替時はグループごと差し替える */
 function smat(c, rough, metal) {
@@ -5859,6 +5860,23 @@ function treeD(x, z, s, pine) {
   t.position.set(x, 0, z);
   return t;
 }
+function flowerPatchTexture() {
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
+  const x = cv.getContext('2d');
+  let seed = 4242; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const cols = ['#ffffff', '#ffd94a', '#ff9ecb', '#c5a3ff', '#ff8a7a'];
+  for (let i = 0; i < 64; i++) {
+    const bx = 12 + rnd() * 232, by = 128, top = 34 + rnd() * 62;
+    x.strokeStyle = 'rgba(38,84,32,0.9)'; x.lineWidth = 2;
+    x.beginPath(); x.moveTo(bx, by); x.quadraticCurveTo(bx + (rnd() - .5) * 10, (by + top) / 2, bx + (rnd() - .5) * 8, top); x.stroke();
+    const fx = bx + (rnd() - .5) * 8;
+    x.fillStyle = cols[i % cols.length];
+    for (let p = 0; p < 5; p++) { const a = p / 5 * Math.PI * 2; x.beginPath(); x.arc(fx + Math.cos(a) * 4.4, top + Math.sin(a) * 4.4, 3.4, 0, 7); x.fill(); }
+    x.fillStyle = '#ffdf6b'; x.beginPath(); x.arc(fx, top, 2.6, 0, 7); x.fill();
+  }
+  const t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+  return t;
+}
 function buildField() {
   const g = new THREE.Group();
   grassTufts(g, 0, 0, 24, 80, 1234, (x, z) => (x * x + z * z) > 5.5);
@@ -5868,6 +5886,19 @@ function buildField() {
   [[-6, 5], [8, -4], [-10, -2], [4, 9], [13, 6]].forEach(p => {
     const r = smesh(new THREE.DodecahedronGeometry(0.28 + rrnd() * 0.3, 0), rockM, p[0], 0.15, p[1]);
     r.rotation.set(rrnd() * 3, rrnd() * 3, rrnd() * 3); r.scale.y = 0.7; g.add(r); });
+  const pathM = photoStd('dirt', 1, 1, 1, smat([0.45, 0.36, 0.26], 1));
+  for (let i = 0; i <= 14; i++) { const t = i / 14;
+    const px = 2.6 * (1 - t) + (-3.8) * t + Math.sin(t * Math.PI) * 1.7, pz = 8.5 * (1 - t) + (-6.5) * t;
+    const c = smesh(new THREE.CircleGeometry(0.62, 14), pathM, px, 0.004 + i * 0.0004, pz);
+    c.rotation.set(-Math.PI / 2, 0, rrnd() * 3); c.castShadow = false; g.add(c); }
+  const flowerM = new THREE.MeshStandardMaterial({ map: flowerPatchTexture(), alphaTest: 0.3, side: THREE.DoubleSide, roughness: 1 });
+  [[3.4, 3.2], [-4.6, 2.4], [5.8, -2.8], [-3.2, -5.4], [1.8, 6.4], [-6.8, -1.2], [7.6, 4.6], [-1.5, -8.2]].forEach((p, i) => {
+    [0, Math.PI / 2].forEach(a => { const f = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.5), flowerM);
+      f.position.set(p[0], 0.25, p[1]); f.rotation.y = a + i * 0.7; f.castShadow = false; g.add(f); }); });
+  [[6.5, -8.5, 0.62], [-8.5, 7.0, 0.55]].forEach((b, bi) => {
+    const core = smesh(blobGeo(b[2], 880 + bi), smat([0.15, 0.28, 0.12], 1), b[0], b[2] * 0.72, b[1]);
+    core.scale.y = 0.78; g.add(core);
+    leafCards(g, b[0], b[2] * 0.78, b[1], b[2] * 1.05, 910 + bi * 7, 3); });
   return g;
 }
 function buildCity() {
@@ -5940,8 +5971,19 @@ function buildCity() {
     plate.castShadow = false; c.add(plate);
     c.position.set(x, 0.02, z); c.rotation.y = ry; return c;
   }
-  g.add(car([0.62, 0.16, 0.14], -7.5, -1.6, 0));
-  g.add(car([0.16, 0.28, 0.55], 9, 1.6, Math.PI));
+  g.add(car([0.62, 0.16, 0.14], -7.5, -2.6, 0));
+  const traffic = [];
+  const tc1 = car([0.20, 0.32, 0.62], -30, -1.6, 0); g.add(tc1); traffic.push({ c: tc1, v: 5.2 });
+  const tc2 = car([0.88, 0.87, 0.85], 30, 1.6, Math.PI); g.add(tc2); traffic.push({ c: tc2, v: -4.4 });
+  traffic.forEach(t => { t.wheels = t.c.children.filter(m => m.geometry && m.geometry.type === 'CylinderGeometry'); });
+  animators.push((tt, dt) => { traffic.forEach(t => {
+    t.c.position.x += t.v * dt;
+    if (t.c.position.x > 33) t.c.position.x = -33;
+    if (t.c.position.x < -33) t.c.position.x = 33;
+    const w = -Math.abs(t.v) * dt / 0.215;
+    t.wheels.forEach(m => m.rotateY(w));
+  }); });
+  g.add(car([0.16, 0.28, 0.55], 9, 2.6, Math.PI));
   const planterM = smat([0.45, 0.42, 0.40], 0.9);
   const bushM = smat([0.25, 0.45, 0.22], 1);
   [-3.6, 3.6, -8.5, 8.5].forEach(x => {
@@ -6555,6 +6597,27 @@ function buildStation() {
     const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-23, w[0], w[1]), new THREE.Vector3(23, w[0], w[1])]);
     g.add(new THREE.Line(geo, wireM));
   });
+  const fore = smesh(new THREE.PlaneGeometry(38, 4.6), photoStd('asphalt', 12, 1.5, 0.97, smat([0.40, 0.40, 0.41], 0.97)), 0, 0.006, 3.3);
+  fore.rotation.x = -Math.PI / 2; fore.castShadow = false; g.add(fore);
+  const crossM = smat([0.88, 0.88, 0.86], 0.8);
+  for (let i = 0; i < 5; i++) { const s = smesh(new THREE.BoxGeometry(0.5, 0.012, 3.6), crossM, -5.6 + i * 0.85, 0.014, 3.3); s.castShadow = false; g.add(s); }
+  function bike(color, bx, bz, ry) {
+    const b = new THREE.Group();
+    const fm = smat(color, 0.5, 0.4); const tm = smat([0.05, 0.05, 0.05], 0.9);
+    [-0.34, 0.34].forEach(dx => { const w = new THREE.Mesh(new THREE.TorusGeometry(0.27, 0.018, 8, 20), tm); w.position.set(dx, 0.27, 0); w.castShadow = true; b.add(w); });
+    const tube = (x1, y1, x2, y2) => { const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy);
+      const m = smesh(new THREE.CylinderGeometry(0.016, 0.016, len, 6), fm, (x1 + x2) / 2, (y1 + y2) / 2, 0);
+      m.rotation.z = Math.atan2(dy, dx) - Math.PI / 2; b.add(m); };
+    tube(-0.34, 0.27, -0.05, 0.52); tube(-0.05, 0.52, 0.30, 0.55); tube(0.30, 0.55, 0.34, 0.27);
+    tube(0.34, 0.27, -0.02, 0.30); tube(-0.02, 0.30, -0.05, 0.52); tube(-0.34, 0.27, -0.02, 0.30);
+    b.add(smesh(new THREE.BoxGeometry(0.20, 0.04, 0.07), tm, -0.08, 0.56, 0));
+    b.add(smesh(new THREE.BoxGeometry(0.16, 0.03, 0.05), tm, 0.33, 0.62, 0));
+    b.position.set(bx, 0, bz); b.rotation.set(0.07, ry, 0); return b;
+  }
+  [2.35, 3.05].forEach(z => g.add(smesh(new THREE.BoxGeometry(2.4, 0.05, 0.05), steelM, 8.2, 0.45, z)));
+  [[0.62, 0.20, 0.18], [0.20, 0.35, 0.60], [0.75, 0.72, 0.70]].forEach((col, i) => g.add(bike(col, 7.5 + i * 0.75, 2.7, 0.12)));
+  const hedgeM = smat([0.15, 0.28, 0.12], 1);
+  for (let hx = -13; hx <= -5; hx += 1.7) { const h = smesh(blobGeo(0.62, 300 + Math.round(hx * 10)), hedgeM, hx, 0.30, 5.6); h.scale.y = 0.62; g.add(h); }
   return g;
 }
 function stripeTexture(colors, w, h, bands) {
@@ -6632,6 +6695,14 @@ function buildBeach() {
   const shoreRock = smesh(blobGeo(1.3, 640), rockM, 15.5, 0.05, -3.6); shoreRock.scale.y = 0.6; g.add(shoreRock);
   const shoreRock2 = smesh(blobGeo(0.9, 641), rockM, 13.8, 0.02, -2.2); shoreRock2.scale.y = 0.6; g.add(shoreRock2);
   g.add(treeD(12.5, 6.0, 1.1, false)); g.add(treeD(-11.5, 6.5, 1.25, true));
+  animators.push((tt, dt) => {
+    waterNrm.offset.set(tt * 0.008, tt * 0.005);
+    foam.position.z = -5.7 + Math.sin(tt * 0.45) * 0.16;
+    foamTex.offset.x = tt * 0.004;
+    boat.position.y = -0.13 + Math.sin(tt * 0.85) * 0.045;
+    boat.rotation.z = Math.sin(tt * 0.6) * 0.035;
+    boat.rotation.x = Math.sin(tt * 0.5 + 1.3) * 0.02;
+  });
   return g;
 }
 function scrollTexture() {
@@ -6735,16 +6806,17 @@ function buildWashitsu() {
 const SCENES = {
   field:   { build: buildField, ground: 'grass', groundVisible: true, fog: [16, 55], cam: [2.7, 1.8, 4.5], tgt: [0, 0.9, 0], anchors: [[-1.08, 0, 0], [0, 0, 0], [1.08, 0, 0]] },
   city:    { build: buildCity, ground: 'concrete', groundVisible: true, fog: [22, 130], cam: [15.5, 3.2, 6.2], tgt: [-1.5, 1.3, 3.6], anchors: [[-1.05, 0.12, 4.05], [0, 0.12, 4.05], [1.05, 0.12, 4.05]] },
-  indoor:  { build: buildIndoor, groundVisible: false, fog: [26, 120], cam: [3.7, 2.1, 5.1], tgt: [-0.4, 1.0, -0.9], anchors: [[-1.15, 0, 0.95], [-0.1, 0, 0.75], [0.95, 0, 0.5]] },
+  indoor:  { build: buildIndoor, shRange: 9, groundVisible: false, fog: [26, 120], cam: [3.7, 2.1, 5.1], tgt: [-0.4, 1.0, -0.9], anchors: [[-1.15, 0, 0.95], [-0.1, 0, 0.75], [0.95, 0, 0.5]] },
   country: { build: buildCountry, ground: 'grass', groundVisible: true, fog: [26, 230], cam: [7.0, 3.1, 11.0], tgt: [0, 1.1, -1.0], anchors: [[-1.05, 0, 3.3], [0, 0, 3.15], [1.05, 0, 2.95]] },
-  hotel:   { build: buildHotel, groundVisible: false, fog: [26, 120], cam: [4.8, 2.5, 6.2], tgt: [0, 1.3, -2.0], anchors: [[-1.25, 0, -2.05], [0, 0, -1.95], [1.3, 0, -1.8]] },
-  shrine:  { build: buildShrine, ground: 'gravel', groundVisible: true, fog: [20, 72], cam: [8.8, 4.4, 16.5], tgt: [0, 1.6, 1.0], anchors: [[-1.05, 0, 2.3], [0, 0, 2.15], [1.05, 0, 2.0]] },
-  station: { build: buildStation, ground: 'concrete', groundVisible: true, fog: [22, 75], cam: [9.5, 3.6, 9.5], tgt: [0, 1.4, -1.6], anchors: [[-1.05, 0.95, -0.9], [0, 0.95, -0.9], [1.05, 0.95, -0.9]] },
-  beach:   { build: buildBeach, ground: 'sand', groundVisible: true, fog: [26, 95], cam: [10.5, 4.2, 13.0], tgt: [-0.8, 1.0, -2.2], anchors: [[-1.05, 0, 3.4], [0, 0, 3.25], [1.05, 0, 3.1]] },
-  washitsu:{ build: buildWashitsu, groundVisible: false, fog: [26, 120], cam: [3.6, 2.3, 3.9], tgt: [0, 0.75, -0.2], anchors: [[-1.0, 0, 1.55], [0.05, 0, 1.4], [1.1, 0, 1.2]] }
+  hotel:   { build: buildHotel, shRange: 10, groundVisible: false, fog: [26, 120], cam: [4.8, 2.5, 6.2], tgt: [0, 1.3, -2.0], anchors: [[-1.25, 0, -2.05], [0, 0, -1.95], [1.3, 0, -1.8]] },
+  shrine:  { build: buildShrine, shRange: 16, ground: 'gravel', groundVisible: true, fog: [20, 72], cam: [8.8, 4.4, 16.5], tgt: [0, 1.6, 1.0], anchors: [[-1.05, 0, 2.3], [0, 0, 2.15], [1.05, 0, 2.0]] },
+  station: { build: buildStation, shRange: 20, ground: 'concrete', groundVisible: true, fog: [22, 75], cam: [9.5, 3.6, 9.5], tgt: [0, 1.4, -1.6], anchors: [[-1.05, 0.95, -0.9], [0, 0.95, -0.9], [1.05, 0.95, -0.9]] },
+  beach:   { build: buildBeach, shRange: 24, ground: 'sand', groundVisible: true, fog: [26, 95], cam: [10.5, 4.2, 13.0], tgt: [-0.8, 1.0, -2.2], anchors: [[-1.05, 0, 3.4], [0, 0, 3.25], [1.05, 0, 3.1]] },
+  washitsu:{ build: buildWashitsu, shRange: 8, groundVisible: false, fog: [26, 120], cam: [3.6, 2.3, 3.9], tgt: [0, 0.75, -0.2], anchors: [[-1.0, 0, 1.55], [0.05, 0, 1.4], [1.1, 0, 1.2]] }
 };
 let sceneName = 'field', sceneGroup = null;
 function clearSceneGroup() {
+  animators.length = 0;
   if (!sceneGroup) return;
   sceneGroup.traverse(o => {
     if (o.geometry) o.geometry.dispose();
@@ -6763,6 +6835,9 @@ function setScene(name) {
   ground.visible = def.groundVisible !== false;
   groundMacro.visible = ground.visible;
   if (def.ground) applyGround(def.ground);
+  const sr = def.shRange || 30;
+  const sc2 = sun.shadow.camera;
+  sc2.left = -sr; sc2.right = sr; sc2.top = sr; sc2.bottom = -sr; sc2.updateProjectionMatrix();
   scene.fog.near = def.fog[0]; scene.fog.far = def.fog[1];
   controls.target.set(def.tgt[0], def.tgt[1], def.tgt[2]);
   camera.position.set(def.cam[0], def.cam[1], def.cam[2]);
@@ -6856,6 +6931,7 @@ function animate() {
   postUniforms.uTime.value = clock.elapsedTime;
   models.forEach(m => { if (m.mixer) m.mixer.update(dt); });
   updateLifeModel(dt);
+  for (let i = 0; i < animators.length; i++) { try { animators[i](clock.elapsedTime, dt); } catch (e) { animators.splice(i, 1); i--; } }
   if (boxHelper && selected) boxHelper.update();
   controls.update();
   renderFrame();
@@ -6864,7 +6940,7 @@ animate();
 
 /* 検証・連携用の公開ハンドル */
 window.Studio = { scene, camera, renderer, controls, applyEnv, applyGround, setScene, models,
-  version: '1.7', get env() { return envName; }, get sceneName() { return sceneName; },
+  version: '1.8', get env() { return envName; }, get sceneName() { return sceneName; },
   get lifeModel() { return lifeModel; },
   life: { play: lifePlayShot, toggleLoop: lifeToggleLoop, togglePose: lifeTogglePose,
     toggleClipLoop: lifeToggleClipLoop, gesture: lifePlayGesture, stop: lifeStopAll,
