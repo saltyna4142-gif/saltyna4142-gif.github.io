@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>3Dフィールド Studio v1.8 — 動きと質感の底上げ</title>
+<title>3Dフィールド Studio v1.9 — 地平線と接地感</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:100%; height:100%; overflow:hidden; background:#0b0f14; font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif; }
@@ -59,10 +59,10 @@
 </head>
 <body>
 <div id="app"></div>
-<button id="uiToggle">🎛 Studio v1.8｜設定を表示</button>
+<button id="uiToggle">🎛 Studio v1.9｜設定を表示</button>
 <div id="panel">
   <h1>3Dフィールド Studio</h1>
-  <div class="ver">v1.8 — 全9シーン（神社・駅・海辺・和室）＋実写テクスチャ＋葉カードの樹木＋流れる雲・走る車・波の動き＋生活動作モデル（全64種）＋PBR＋映画風ポストプロセス</div>
+  <div class="ver">v1.9 — 全9シーン（神社・駅・海辺・和室）＋遠景の地平線（丘・山並み・島）＋人物の接地影＋実写テクスチャ＋流れる雲・走る車・波の動き＋生活動作モデル（全64種）＋PBR＋映画風ポストプロセス</div>
   <h2>シーン</h2>
   <label>場所
     <select id="sceneSel">
@@ -4807,9 +4807,10 @@ const SAMPLE_M_URL='human-m.b64';
 const SAMPLE_F_URL='human-f.b64';
 const SAMPLE_LIFE_URL='life-model.b64';
 'use strict';
-/* 3Dフィールド Studio v1.8 — three.js PBR + 環境光（PMREM）の展示フィールド
+/* 3Dフィールド Studio v1.9 — three.js PBR + 環境光（PMREM）の展示フィールド
    v1.2: シーン切替（街並み・屋内・田舎・ホテル）
-   v1.3: 生活動作スタジオのモデル（骨格・指・全64動作・小道具）を組み込み */
+   v1.3: 生活動作スタジオのモデル（骨格・指・全64動作・小道具）を組み込み 
+   v1.9: 地平線と接地感（遠景の地面＋丘・山並み・島で地面の縁を消し、人物の足元に接地影、街は1階の庇と通りの奥・遠景ビル、駅と神社にも遠景、海面に船と灯台の映り込み、野原の霧を少し先まで）。 */
 const $ = id => document.getElementById(id);
 const toastEl = $('toast');
 let toastTimer = 0;
@@ -5804,6 +5805,23 @@ function aoGround(w, d, x, z, y, op) {
   m.scale.set(w, d, 1); m.renderOrder = 1;
   return m;
 }
+/* ---------------- 遠景（地平線の処理） ---------------- */
+function farGround(g, col, r) { const m = smesh(new THREE.CircleGeometry(r, 40), smat(col, 1), 0, -0.05, 0); m.rotation.x = -Math.PI / 2; m.castShadow = false; m.receiveShadow = false; g.add(m); }
+function hill(g, x, z, w, h, d, col) { const m = smesh(new THREE.SphereGeometry(1, 20, 14), smat(col, 1), x, -h * 0.22, z); m.scale.set(w, h, d); m.castShadow = false; m.receiveShadow = false; g.add(m); }
+function mountain(g, x, z, r, h, col) { const m = smesh(new THREE.ConeGeometry(r, h, 7), smat(col, 1, 0, true), x, h / 2 - 1.5, z); m.castShadow = false; m.receiveShadow = false; g.add(m); }
+function reflectionTexture(sail) {
+  const cv = document.createElement('canvas'); cv.width = 128; cv.height = 256;
+  const c = cv.getContext('2d');
+  for (let y = 0; y < 256; y += 3) {
+    const t = y / 256, wob = Math.sin(y * 0.11) * (2 + t * 5);
+    let wdt, col;
+    if (sail) { wdt = t < 0.45 ? 30 * (1 - t * 1.1) + 5 : 42 * Math.sin(Math.min(1, (t - 0.4) / 0.6) * Math.PI) + 8; col = t < 0.45 ? '232,236,238' : '158,74,52'; }
+    else { wdt = 16 - t * 6; col = Math.floor(y / 34) % 2 === 0 ? '232,228,220' : '188,62,46'; }
+    c.fillStyle = 'rgba(' + col + ',' + (0.5 * (1 - t * 0.75)).toFixed(3) + ')';
+    c.fillRect(64 - wdt / 2 + wob, y, wdt, 3);
+  }
+  const tx = new THREE.CanvasTexture(cv); tx.encoding = THREE.sRGBEncoding; return tx;
+}
 function grassBladeTexture() {
   const cv = document.createElement('canvas'); cv.width = cv.height = 128;
   const x = cv.getContext('2d');
@@ -5899,6 +5917,13 @@ function buildField() {
     const core = smesh(blobGeo(b[2], 880 + bi), smat([0.15, 0.28, 0.12], 1), b[0], b[2] * 0.72, b[1]);
     core.scale.y = 0.78; g.add(core);
     leafCards(g, b[0], b[2] * 0.78, b[1], b[2] * 1.05, 910 + bi * 7, 3); });
+  farGround(g, [0.29, 0.41, 0.19], 130);
+  hill(g, -46, -30, 20, 6.5, 12, [0.24, 0.38, 0.18]);
+  hill(g, 8, -52, 26, 8, 13, [0.22, 0.36, 0.17]);
+  hill(g, 47, -18, 18, 5.5, 11, [0.25, 0.39, 0.19]);
+  hill(g, 40, 34, 22, 6, 12, [0.24, 0.38, 0.18]);
+  hill(g, -38, 36, 24, 7, 13, [0.23, 0.37, 0.17]);
+  hill(g, -52, 4, 16, 5, 10, [0.25, 0.39, 0.19]);
   return g;
 }
 function buildCity() {
@@ -5932,6 +5957,7 @@ function buildCity() {
     const face = s[1] < 0 ? 1 : -1;
     [[-s[2] / 4, s[3] * 0.35], [s[2] / 5, s[3] * 0.6]].forEach(off =>
       g.add(smesh(new THREE.BoxGeometry(0.75, 0.6, 0.3), acM, s[0] + off[0], off[1], s[1] + face * (s[4] / 2 + 0.16))));
+    if (i % 2 === 0) { const awn = smesh(new THREE.BoxGeometry(s[2] * 0.55, 0.07, 1.15), smat([[0.55, 0.20, 0.16], [0.13, 0.32, 0.38], [0.16, 0.22, 0.42], [0.80, 0.74, 0.62]][i % 4], 0.8), s[0], 2.75, s[1] + face * (s[4] / 2 + 0.55)); awn.rotation.x = face * 0.38; g.add(awn); }
   });
   const poleM = smat([0.20, 0.21, 0.23], 0.6, 0.6);
   const lampM = new THREE.MeshStandardMaterial({ roughness: 0.4, emissive: 0xffdf9e, emissiveIntensity: 0.9 });
@@ -6038,6 +6064,11 @@ function buildCity() {
   [[-52, -48, 26], [0, -62, 34], [48, -50, 24], [62, 8, 30], [-60, 14, 22], [30, 58, 27], [-34, 56, 31], [66, -18, 20]].forEach(p => {
     const b = smesh(new THREE.BoxGeometry(13, p[2], 13), skyM, p[0], p[2] / 2 - 0.5, p[1]);
     b.castShadow = false; b.receiveShadow = false; g.add(b); });
+  const endM = smat([0.62, 0.66, 0.70], 0.95);
+  [[-44, -6, 10, 15], [-46, 5, 9, 12], [44, -5, 10, 17], [46, 6, 9, 13]].forEach(bd => { const bm = smesh(new THREE.BoxGeometry(8, bd[3], bd[2]), endM, bd[0], bd[3] / 2, bd[1]); bm.castShadow = false; bm.receiveShadow = false; g.add(bm); });
+  const farM2 = smat([0.66, 0.70, 0.74], 0.95);
+  [[-24, -26, 10, 24], [0, -28, 12, 30], [24, -26, 10, 22], [-12, 27, 11, 26], [14, 27, 10, 21]].forEach(bd => { const bm = smesh(new THREE.BoxGeometry(bd[2], bd[3], 9), farM2, bd[0], bd[3] / 2, bd[1]); bm.castShadow = false; bm.receiveShadow = false; g.add(bm); });
+  farGround(g, [0.32, 0.32, 0.33], 160);
 
   return g;
 }
@@ -6314,6 +6345,14 @@ function buildCountry() {
   g.add(treeD(-20, -17, 1.3, true)); g.add(treeD(23, -13, 1.15, true)); g.add(treeD(-24, 12, 1.05, true));
   g.add(aoGround(7.4, 6.2, -9.5, -6, 0.006, 0.28));
   g.add(aoGround(6.0, 5.2, 9.5, -9, 0.006, 0.28));
+  farGround(g, [0.31, 0.43, 0.21], 280);
+  mountain(g, -70, -120, 55, 34, [0.36, 0.47, 0.42]);
+  mountain(g, 10, -150, 70, 42, [0.32, 0.44, 0.42]);
+  mountain(g, 95, -110, 50, 30, [0.38, 0.49, 0.43]);
+  mountain(g, -130, -40, 45, 26, [0.40, 0.50, 0.44]);
+  mountain(g, 140, -30, 48, 27, [0.40, 0.50, 0.44]);
+  hill(g, -55, -55, 26, 9, 15, [0.27, 0.42, 0.20]);
+  hill(g, 60, -60, 30, 10, 16, [0.26, 0.41, 0.19]);
   return g;
 }
 function hotelSignTexture() {
@@ -6512,6 +6551,13 @@ function buildShrine() {
     leafCards(maple, b[0], b[1], b[2], b[3], 720 + i * 9, 4, leafMatsRed);
   });
   maple.position.set(8.2, 0, 3.6); g.add(maple);
+  farGround(g, [0.19, 0.29, 0.15], 110);
+  hill(g, 0, -48, 34, 11, 14, [0.13, 0.25, 0.11]);
+  hill(g, -42, -20, 24, 9, 13, [0.14, 0.26, 0.12]);
+  hill(g, 42, -18, 24, 9.5, 13, [0.13, 0.25, 0.11]);
+  hill(g, -40, 30, 26, 8.5, 13, [0.14, 0.26, 0.12]);
+  hill(g, 40, 32, 26, 9, 13, [0.13, 0.25, 0.11]);
+  hill(g, 0, 52, 30, 8, 13, [0.14, 0.26, 0.12]);
   return g;
 }
 function trainSideTexture() {
@@ -6618,6 +6664,11 @@ function buildStation() {
   [[0.62, 0.20, 0.18], [0.20, 0.35, 0.60], [0.75, 0.72, 0.70]].forEach((col, i) => g.add(bike(col, 7.5 + i * 0.75, 2.7, 0.12)));
   const hedgeM = smat([0.15, 0.28, 0.12], 1);
   for (let hx = -13; hx <= -5; hx += 1.7) { const h = smesh(blobGeo(0.62, 300 + Math.round(hx * 10)), hedgeM, hx, 0.30, 5.6); h.scale.y = 0.62; g.add(h); }
+  farGround(g, [0.50, 0.50, 0.48], 130);
+  hill(g, -58, -34, 24, 7, 13, [0.30, 0.40, 0.24]);
+  hill(g, 60, -30, 26, 8, 14, [0.29, 0.39, 0.23]);
+  const farStaM = smat([0.58, 0.63, 0.68], 0.95);
+  [[-26, -36, 9, 13], [24, -38, 11, 16], [38, -34, 8, 10]].forEach(bd => { const bm = smesh(new THREE.BoxGeometry(bd[2], bd[3], 8), farStaM, bd[0], bd[3] / 2, bd[1]); bm.castShadow = false; bm.receiveShadow = false; g.add(bm); });
   return g;
 }
 function stripeTexture(colors, w, h, bands) {
@@ -6695,8 +6746,19 @@ function buildBeach() {
   const shoreRock = smesh(blobGeo(1.3, 640), rockM, 15.5, 0.05, -3.6); shoreRock.scale.y = 0.6; g.add(shoreRock);
   const shoreRock2 = smesh(blobGeo(0.9, 641), rockM, 13.8, 0.02, -2.2); shoreRock2.scale.y = 0.6; g.add(shoreRock2);
   g.add(treeD(12.5, 6.0, 1.1, false)); g.add(treeD(-11.5, 6.5, 1.25, true));
+  farGround(g, [0.07, 0.28, 0.45], 240);
+  hill(g, -44, -68, 17, 6, 9, [0.15, 0.29, 0.19]);
+  hill(g, 58, -54, 22, 4.5, 10, [0.15, 0.29, 0.19]);
+  const streakM = new THREE.MeshBasicMaterial({ map: reflectionTexture(true), transparent: true, opacity: 0.32, depthWrite: false });
+  const streak1 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 7.5), streakM);
+  streak1.rotation.x = -Math.PI / 2; streak1.rotation.z = -0.5; streak1.position.set(3.0, 0.045, -9.6); streak1.renderOrder = 3; g.add(streak1);
+  const streakM2 = new THREE.MeshBasicMaterial({ map: reflectionTexture(false), transparent: true, opacity: 0.28, depthWrite: false });
+  const streak2 = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 5.5), streakM2);
+  streak2.rotation.x = -Math.PI / 2; streak2.position.set(-13, 0.045, -5.6); streak2.renderOrder = 3; g.add(streak2);
   animators.push((tt, dt) => {
     waterNrm.offset.set(tt * 0.008, tt * 0.005);
+    streakM.opacity = 0.30 + Math.sin(tt * 1.3) * 0.06;
+    streakM2.opacity = 0.26 + Math.sin(tt * 1.1 + 2.0) * 0.05;
     foam.position.z = -5.7 + Math.sin(tt * 0.45) * 0.16;
     foamTex.offset.x = tt * 0.004;
     boat.position.y = -0.13 + Math.sin(tt * 0.85) * 0.045;
@@ -6804,7 +6866,7 @@ function buildWashitsu() {
 }
 
 const SCENES = {
-  field:   { build: buildField, ground: 'grass', groundVisible: true, fog: [16, 55], cam: [2.7, 1.8, 4.5], tgt: [0, 0.9, 0], anchors: [[-1.08, 0, 0], [0, 0, 0], [1.08, 0, 0]] },
+  field:   { build: buildField, ground: 'grass', groundVisible: true, fog: [16, 85], cam: [2.7, 1.8, 4.5], tgt: [0, 0.9, 0], anchors: [[-1.08, 0, 0], [0, 0, 0], [1.08, 0, 0]] },
   city:    { build: buildCity, ground: 'concrete', groundVisible: true, fog: [22, 130], cam: [15.5, 3.2, 6.2], tgt: [-1.5, 1.3, 3.6], anchors: [[-1.05, 0.12, 4.05], [0, 0.12, 4.05], [1.05, 0.12, 4.05]] },
   indoor:  { build: buildIndoor, shRange: 9, groundVisible: false, fog: [26, 120], cam: [3.7, 2.1, 5.1], tgt: [-0.4, 1.0, -0.9], anchors: [[-1.15, 0, 0.95], [-0.1, 0, 0.75], [0.95, 0, 0.5]] },
   country: { build: buildCountry, ground: 'grass', groundVisible: true, fog: [26, 230], cam: [7.0, 3.1, 11.0], tgt: [0, 1.1, -1.0], anchors: [[-1.05, 0, 3.3], [0, 0, 3.15], [1.05, 0, 2.95]] },
@@ -6842,13 +6904,14 @@ function setScene(name) {
   controls.target.set(def.tgt[0], def.tgt[1], def.tgt[2]);
   camera.position.set(def.cam[0], def.cam[1], def.cam[2]);
   ['m', 'life', 'f'].forEach((r, i) => { const m = models.find(x => x.role === r); const a = def.anchors[i]; if (m && a) m.group.position.set(a[0], a[1], a[2]); });
+  def.anchors.forEach(a => { sceneGroup.add(aoGround(1.15, 1.15, a[0], a[2], (a[1] || 0) + 0.015, 0.38)); });
   $('sceneSel').value = name;
 }
 
 /* ---------------- UI 配線 ---------------- */
 $('uiToggle').onclick = () => {
   const p = $('panel'); const open = p.classList.toggle('open');
-  $('uiToggle').textContent = open ? '🎛 Studio v1.8｜設定を隠す' : '🎛 Studio v1.8｜設定を表示';
+  $('uiToggle').textContent = open ? '🎛 Studio v1.9｜設定を隠す' : '🎛 Studio v1.9｜設定を表示';
 };
 $('envSel').onchange = e => applyEnv(e.target.value);
 $('expo').oninput = e => { $('expoVal').textContent = Number(e.target.value).toFixed(2);
@@ -6940,7 +7003,7 @@ animate();
 
 /* 検証・連携用の公開ハンドル */
 window.Studio = { scene, camera, renderer, controls, applyEnv, applyGround, setScene, models,
-  version: '1.8', get env() { return envName; }, get sceneName() { return sceneName; },
+  version: '1.9', get env() { return envName; }, get sceneName() { return sceneName; },
   get lifeModel() { return lifeModel; },
   life: { play: lifePlayShot, toggleLoop: lifeToggleLoop, togglePose: lifeTogglePose,
     toggleClipLoop: lifeToggleClipLoop, gesture: lifePlayGesture, stop: lifeStopAll,
